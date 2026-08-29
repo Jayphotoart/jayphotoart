@@ -25,6 +25,8 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+import razorpay
+client = razorpay.Client(auth=(st.secrets["razorpay_key_id"], st.secrets["razorpay_key_secret"]))
 
 # ============================================================
 # 2️⃣ SESSION STATE INIT
