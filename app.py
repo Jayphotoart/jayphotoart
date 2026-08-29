@@ -979,47 +979,60 @@ elif option == "🔍 ફોટો શોધો":
                 if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
                     st.session_state.show_checkout = True
 
-                import urllib.parse
-                import qrcode
-                import numpy as np
-                import streamlit as st
-
                 if st.session_state.get("show_checkout", False):
-                    MY_UPI_ID = "dineshmakwna123@oksbi"
-                    MY_NAME = "DINESH RAGHAVBHAI MAKWANA"
-                    encoded_name = urllib.parse.quote(MY_NAME)
-                    encoded_note = urllib.parse.quote("Photo Download")
-                    amount_str = f"{float(total_price):.2f}"
+                    # Razorpay Order બનાવો
+                    amount_paise = int(float(total_price) * 100)
+                    order = person.order.create({
+                        "amount": amount_paise,
+                        "currency": "INR",
+                        "payment_capture": 1
+                    })
+                    order_id = order["id"]
 
-                    # UPI લિંક બનાવો
-                    upi_url = f"upi://pay?pa={MY_UPI_ID}&pn={encoded_name}&am={amount_str}&cu=INR&tn={encoded_note}"
+                    # Razorpay Checkout Options
+                    razorpay_options = {
+                        "key": st.secrets["razorpay_key_id"],
+                        "amount": str(amount_paise),
+                        "currency": "INR",
+                        "name": "તમારી એપનું નામ",
+                        "description": "Photo Download Payment",
+                        "order_id": order_id,
+                        "prefill": {
+                            "name": "",
+                            "email": "",
+                            "contact": ""
+                        },
+                        "theme": {
+                            "color": "#3399cc"
+                        }
+                    }
 
-                    st.sidebar.markdown("---")
-                    st.sidebar.markdown(f"### 💳 પેમેન્ટ કરો: ₹{total_price}")
-
-                    # QR કોડ મોટો અને સ્પષ્ટ બનાવો
-                    qr = qrcode.QRCode(
-                        version=1,
-                        error_correction=qrcode.constants.ERROR_CORRECT_L,
-                        box_size=10,
-                        border=4,
-                    )
-                    qr.add_data(upi_url)
-                    qr.make(fit=True)
-                    qr_img = qr.make_image(fill_color="black", back_color="white")
-                    qr_arr = np.array(qr_img.convert('RGB'))
-                    st.sidebar.image(qr_arr, caption="📱 UPI એપથી સ્કેન કરો", width=220)
-
-                    # UPI ID બતાવો અને કૉપી કરવાની સુવિધા
-                    st.sidebar.caption(f"UPI ID: `{MY_UPI_ID}`")
-                    st.sidebar.code(MY_UPI_ID, language="text")
-
-                    # મોબાઈલ પર ક્લિક કરી શકાય તેવી લિંક (જો શક્ય હોય તો)
-                    st.sidebar.markdown(f'<a href="{upi_url}" target="_blank">📲 સીધું UPI ખોલવા માટે અહીં ક્લિક કરો</a>', unsafe_allow_html=True)
-                    st.sidebar.caption("જો QR સ્કેન ન થાય તો ઉપરની લિંક પર ક્લિક કરો અથવા UPI ID જાતે દાખલ કરો.")
+                    # JavaScript થી Razorpay Checkout ખોલો
+                    razorpay_js = f"""
+                    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+                    <script>
+                    var options = {json.dumps(razorpay_options)};
+                    options.handler = function(response) {{
+                        // પેમેન્ટ સફળ થતાં જ query param સેટ કરીને rerun કરો
+                        const params = new URLSearchParams(window.location.search);
+                        params.set("razorpay_payment_id", response.razorpay_payment_id);
+                        params.set("razorpay_order_id", response.razorpay_order_id);
+                        params.set("razorpay_signature", response.razorpay_signature);
+                        window.location.search = params.toString();
+                    }};
+                    var rzp = new Razorpay(options);
+                    rzp.open();
+                    </script>
+                    """
+                    st.sidebar.markdown(razorpay_js, unsafe_allow_html=True)
+                    st.sidebar.button("💳 Razorpay થી પેમેન્ટ કરો", on_click=None)  # ખાલી બટન, JS ચલાવવા માટે
 
                     # પેમેન્ટ કન્ફર્મ બટન
-                    if st.sidebar.button("✅ પેમેન્ટ થઈ ગયું! (ફોટા મેળવો)", key="payment_done_btn", use_container_width=True):
+                    # app ની શરૂઆતમાં અથવા યોગ્ય જગ્યાએ
+                    query_params = st.query_params
+                    if "razorpay_payment_id" in query_params:
+                        payment_id = query_params["razorpay_payment_id"]
+                        # અહીં પેમેન્ટ સફળ માનીને તમારું કામ કરો
                         unique_persons = set(item['person'] for item in cart)
                         persons_text = ", ".join(unique_persons)
                         send_telegram_message(
@@ -1027,10 +1040,13 @@ elif option == "🔍 ફોટો શોધો":
                             f"📸 ઇવેન્ટ: {event_name}\n"
                             f"👤 ગ્રાહક: {persons_text}\n"
                             f"💵 રકમ: ₹{total_price}\n"
-                            f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
+                            f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}\n"
+                            f"🧾 Razorpay Payment ID: {payment_id}"
                         )
                         st.session_state.payment_done = True
                         st.session_state.show_checkout = False
+                        # Query params સાફ કરો
+                        st.query_params.clear()
                         st.rerun()
 
             # ૨. ડાઉનલોડ અને શેરિંગ બટનો (હવે Google Drive માંથી સાચી ZIP બનશે)
