@@ -25,8 +25,6 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import razorpay
-client = razorpay.Client(auth=(st.secrets["razorpay_key_id"], st.secrets["razorpay_key_secret"]))
 
 # ============================================================
 # 2️⃣ SESSION STATE INIT
@@ -810,145 +808,123 @@ elif option == "🔍 ફોટો શોધો":
                 st.sidebar.info(f"👤 વ્યક્તિઓ: {', '.join(persons_list)}")
 
                         # ---------- 2 OPTIONS: Selfie / Upload ----------
-                st.subheader("📸 ફોટો અપલોડ કરવાની રીત")
-                upload_option = st.radio(
-                    "વિકલ્પ પસંદ કરો:",
-                    ["📸 કેમેરાથી સેલ્ફી લો", "📁 ફોટો અપલોડ કરો"],
-                    index=0,
-                    key=f"upload_option_{event_name}"
-                )
+        # ---------- 2 OPTIONS: Selfie / Upload ----------
+        st.subheader("📸 ફોટો અપલોડ કરવાની રીત")
+        upload_option = st.radio(
+            "વિકલ્પ પસંદ કરો:",
+            ["📸 કેમેરાથી સેલ્ફી લો", "📁 ફોટો અપલોડ કરો"],
+            index=0,
+            key=f"upload_option_{event_name}"
+        )
 
-                uploaded_file = None
-                if upload_option == "📸 કેમેરાથી સેલ્ફી લો":
-                    uploaded_file = st.camera_input("📸 સેલ્ફી લો", key=f"camera_input_{event_name}")
-                else:
-                    uploaded_file = st.file_uploader(
-                        "📁 ફોટો પસંદ કરો...",
-                        type=["jpg", "jpeg", "png"],
-                        key=f"file_uploader_{event_name}"
-                    )
+        uploaded_file = None
+        if upload_option == "📸 કેમેરાથી સેલ્ફી લો":
+            uploaded_file = st.camera_input("📸 સેલ્ફી લો", key=f"camera_input_{event_name}")
+        else:
+            uploaded_file = st.file_uploader(
+                "📁 ફોટો પસંદ કરો...",
+                type=["jpg", "jpeg", "png"],
+                key=f"file_uploader_{event_name}"
+            )
 
-                # matched_persons ખાલી શરૂ કરો
-                matched_persons = set()
+        matched_photos = []
 
-                # ---------- SEARCH PROCESS ----------
-                if uploaded_file is not None:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        tmp_path = tmp_file.name
+        # ---------- SEARCH PROCESS (બધા ફોટા બતાવવા માટે) ----------
+        if uploaded_file is not None:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
 
-                    img = cv2.imread(tmp_path)
-                    if img is not None:
-                        st.image(img, channels="BGR", caption="તમારો ફોટો", width=250)
-                        with st.spinner("🔍 તમારા ફોટા શોધાઈ રહ્યા છે..."):
-                            faces = app.get(img)
-                            if len(faces) == 0:
-                                st.warning("❌ ફોટામાં કોઈ ચહેરો દેખાયો નહીં!")
-                            else:
-                                st.success(f"✅ {len(faces)} ચહેરો શોધાયો!")
-                                faces = sorted(faces, key=lambda f: f.bbox[0])
+            img = cv2.imread(tmp_path)
+            if img is not None:
+                st.image(img, channels="BGR", caption="તમારો ફોટો", width=250)
+                with st.spinner("🔍 તમારા બધા ફોટા શોધાઈ રહ્યા છે..."):
+                    faces = app.get(img)
+                    if len(faces) == 0:
+                        st.warning("❌ ફોટામાં કોઈ ચહેરો ઓળખાયો નહીં! કૃપા કરીને ચોખ્ખો ફોટો આપો.")
+                    else:
+                        st.success("✅ ચહેરો ઓળખાઈ ગયો!")
+                        user_face = faces[0]
+                        user_emb = user_face.embedding / np.linalg.norm(user_face.embedding)
 
-                                # Query embeddings
-                                query_embeddings = []
-                                for i, face in enumerate(faces):
-                                    emb = face.embedding / np.linalg.norm(face.embedding)
-                                    query_embeddings.append({
-                                        "query_face": f"face_{i}",
-                                        "embedding": emb.tolist()
-                                    })
+                        # ડેટાબેઝના ૧૩ એ ૧૩ ફોટા સાથે સરખામણી કરો
+                        matched_person_names = set()
+                        for item in db_data:
+                            db_emb = parse_embedding(item.get("embedding"))
+                            if db_emb is not None:
+                                sim = float(np.dot(user_emb, db_emb))
+                                if sim >= 0.40:  # ૪૦% થી વધુ મેચ થતા બધા જ ફોટા લો
+                                    item_copy = dict(item)
+                                    item_copy["similarity"] = sim
+                                    matched_photos.append(item_copy)
+                                    if item.get("person_label"):
+                                        matched_person_names.add(item.get("person_label"))
 
-                                # Search in FAISS
-                                query_face_matches = {}
-                                for q_data in query_embeddings:
-                                    q_face = q_data["query_face"]
-                                    q_emb = np.array(q_data["embedding"], dtype=np.float32).reshape(1, -1)
-                                    k = min(10, len(db_data))
-                                    scores, indices = index.search(q_emb, k)
-                                    query_face_matches[q_face] = []
-                                    for score, idx in zip(scores[0], indices[0]):
-                                        if score > 0:
-                                            query_face_matches[q_face].append({
-                                                "person": db_data[idx]["person_label"],
-                                                "similarity": float(score),
-                                                "filename": db_data[idx]["filename"]
-                                            })
+                        # શ્રેષ્ઠ મેચ પહેલાં ગોઠવો
+                        matched_photos = sorted(matched_photos, key=lambda x: x["similarity"], reverse=True)
 
-                                # Assign best matches
-                                result = find_best_global_assignment(
-                                    query_embeddings,
-                                    query_face_matches,
-                                    persons_list
-                                )
+                        # ---------- ફોટા બતાવો ----------
+                        st.subheader("📸 તમારા મેચ થયેલા બધા ફોટા")
+                        if matched_photos:
+                            st.success(f"🎉 તમને મળતા આવતા કુલ **{len(matched_photos)}** ફોટા મળ્યા છે!")
+                            
+                            cols = st.columns(3)
+                            for idx, item in enumerate(matched_photos):
+                                col = cols[idx % 3]
+                                with col:
+                                    file_id = item.get("drive_file_id")
+                                    img_path = None
+                                    
+                                    if file_id:
+                                        img_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w600"
+                                        st.image(img_url, caption=f"મેચ: {int(item['similarity']*100)}%", use_container_width=True)
+                                        img_path = img_url
+                                    else:
+                                        local_path = os.path.join("events", event_name, "images", item.get("filename", ""))
+                                        if os.path.exists(local_path):
+                                            st.image(local_path, caption=f"મેચ: {int(item['similarity']*100)}%", use_container_width=True)
+                                            img_path = local_path
+                                        else:
+                                            st.write(f"📁 {item.get('filename', 'Unknown')}")
 
-                                if result:
-                                    for match in result:
-                                        if match is not None and match.get('similarity', 0) > 0.30:
-                                            matched_persons.add(match['person'])
+                                    price = PHOTO_PRICE
+                                    person_name = item.get("person_label", "MyPhoto")
+                                    cart_key = f"cart_{idx}_{item.get('filename')}"
+                                    
+                                    selected = st.checkbox(f"🛒 ₹{price}" if price > 0 else "🆓 FREE", key=cart_key)
+                                    
+                                    current_item = {
+                                        "person": person_name,
+                                        "filename": item.get("filename"),
+                                        "price": price,
+                                        "img_path": img_path,
+                                        "drive_file_id": file_id
+                                    }
+                                    if selected:
+                                        if not any(c["filename"] == item.get("filename") for c in st.session_state.cart):
+                                            st.session_state.cart.append(current_item)
+                                    else:
+                                        st.session_state.cart = [c for c in st.session_state.cart if c["filename"] != item.get("filename")]
 
-                                # ---------- ફોટા બતાવો ----------
-                                if matched_persons:
-                                    st.subheader("📸 તમારા મેચ થયેલા ફોટા")
-                                    for person in matched_persons:
-                                        st.markdown(f"### 👤 વ્યક્તિ: **{person}**")
-                                        person_photos = [item for item in db_data if item.get("person_label") == person]
-                                        st.write(f"📁 આ વ્યક્તિના કુલ **{len(person_photos)}** ફોટા મળ્યા છે.")
-
-                                        if person_photos:
-                                            cols = st.columns(3)
-                                            for idx, item in enumerate(person_photos):
-                                                col = cols[idx % 3]
-                                                with col:
-                                                    file_id = item.get("drive_file_id")
-                                                    img_path = None
-                                                    if file_id:
-                                                        img_url = f"https://drive.google.com/thumbnail?id={file_id}&sz=w600"
-                                                        st.image(img_url, caption=f"ફોટો {idx+1}", use_container_width=True)
-                                                        img_path = img_url
-                                                    else:
-                                                        local_path = os.path.join("events", event_name, "images", item.get("filename", ""))
-                                                        if os.path.exists(local_path):
-                                                            st.image(local_path, caption=f"ફોટો {idx+1}", use_container_width=True)
-                                                            img_path = local_path
-                                                        else:
-                                                            st.write(f"📁 {item.get('filename', 'Unknown')}")
-
-                                                    price = PHOTO_PRICE
-                                                    cart_key = f"cart_{person}_{idx}_{item.get('filename')}"
-                                                    selected = st.checkbox(f"🛒 ₹{price}" if price > 0 else "🆓 FREE", key=cart_key)
-                                                    
-                                                    # કાર્ટમાં ઉમેરો કે કાઢો
-                                                    current_item = {
-                                                        "person": person,
-                                                        "filename": item.get("filename"),
-                                                        "price": price,
-                                                        "img_path": img_path,
-                                                        "drive_file_id": file_id
-                                                    }
-                                                    if selected:
-                                                        if not any(c["filename"] == item.get("filename") for c in st.session_state.cart):
-                                                            st.session_state.cart.append(current_item)
-                                                    else:
-                                                        st.session_state.cart = [c for c in st.session_state.cart if c["filename"] != item.get("filename")]
-
-                                            if st.button(f"➕ {person} ના બધા ફોટા કાર્ટમાં ઉમેરો", key=f"add_all_{person}"):
-                                                for item in person_photos:
-                                                    file_id = item.get("drive_file_id")
-                                                    local_path = os.path.join("events", event_name, "images", item.get("filename", ""))
-                                                    c_item = {
-                                                        "person": person,
-                                                        "filename": item.get("filename"),
-                                                        "price": PHOTO_PRICE,
-                                                        "img_path": local_path if os.path.exists(local_path) else None,
-                                                        "drive_file_id": file_id
-                                                    }
-                                                    if not any(c["filename"] == item.get("filename") for c in st.session_state.cart):
-                                                        st.session_state.cart.append(c_item)
-                                                st.rerun()
-                                else:
-                                    st.warning("⚠️ તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
+                            if st.button(f"➕ આ બધા ({len(matched_photos)}) ફોટા કાર્ટમાં ઉમેરો", key=f"add_all_matched"):
+                                for item in matched_photos:
+                                    file_id = item.get("drive_file_id")
+                                    local_path = os.path.join("events", event_name, "images", item.get("filename", ""))
+                                    c_item = {
+                                        "person": item.get("person_label", "MyPhoto"),
+                                        "filename": item.get("filename"),
+                                        "price": PHOTO_PRICE,
+                                        "img_path": local_path if os.path.exists(local_path) else None,
+                                        "drive_file_id": file_id
+                                    }
+                                    if not any(c["filename"] == item.get("filename") for c in st.session_state.cart):
+                                        st.session_state.cart.append(c_item)
+                                st.rerun()
+                        else:
+                            st.warning("⚠️ તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
 
         # ============================================================
-        # 🛒 CART DISPLAY (સાઇડબાર)
+        # 🛒 CART DISPLAY & RAZORPAY PAYMENT (સાઇડબાર)
         # ============================================================
         st.sidebar.markdown("---")
         st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
@@ -966,75 +942,70 @@ elif option == "🔍 ફોટો શોધો":
             
             st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
 
-            # કાર્ટ ખાલી કરવાનું બટન
+            # કાર્ટ ખાલી કરો
             if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
                 st.session_state.cart = []
                 st.session_state.payment_done = False
                 st.session_state.show_checkout = False
+                st.session_state.razorpay_url = None
                 st.rerun()
 
-            # જો ફોટા ફ્રી (₹0) હોય અથવા પેમેન્ટ થઈ ગયું હોય
             is_ready_to_download = (total_price == 0) or st.session_state.get("payment_done", False)
 
-            # ૧. જો પૈસા ચૂકવવાના હોય (total_price > 0) અને પેમેન્ટ બાકી હોય
+            # ૧. જો પૈસા ચૂકવવાના હોય (total_price > 0)
             if total_price > 0 and not st.session_state.get("payment_done", False):
                 if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
                     st.session_state.show_checkout = True
+                    
+                    # 🔥 Razorpay Payment Link બનાવો
+                    try:
+                        rz_key = st.secrets["razorpay_key_id"]
+                        rz_secret = st.secrets["razorpay_key_secret"]
+                        amount_paise = int(float(total_price) * 100)
+                        
+                        resp = requests.post(
+                            "https://api.razorpay.com/v1/payment_links",
+                            auth=(rz_key, rz_secret),
+                            json={
+                                "amount": amount_paise,
+                                "currency": "INR",
+                                "accept_partial": False,
+                                "description": f"Photo Download for {event_name}",
+                                "customer": {
+                                    "name": "Customer",
+                                    "email": "customer@example.com",
+                                    "contact": "+919999999999"
+                                },
+                                "notify": {"sms": False, "email": False},
+                                "reminder_enable": False,
+                                "callback_url": "https://jayphotoart.streamlit.app",
+                                "callback_method": "get"
+                            }
+                        )
+                        if resp.status_code == 200:
+                            st.session_state.razorpay_url = resp.json().get("short_url")
+                        else:
+                            st.session_state.razorpay_url = None
+                    except Exception as e:
+                        st.sidebar.error(f"Razorpay Error: {e}")
 
+                # Razorpay બટન બતાવો
                 if st.session_state.get("show_checkout", False):
-                    # Razorpay Order બનાવો
-                    amount_paise = int(float(total_price) * 100)
-                    order = person.order.create({
-                        "amount": amount_paise,
-                        "currency": "INR",
-                        "payment_capture": 1
-                    })
-                    order_id = order["id"]
+                    st.sidebar.markdown("---")
+                    st.sidebar.markdown(f"### 💳 પેમેન્ટ કરો: ₹{total_price}")
+                    
+                    rz_url = st.session_state.get("razorpay_url")
+                    if rz_url:
+                        st.sidebar.link_button("💳 Pay via Razorpay (GPay/Card/UPI)", rz_url, use_container_width=True)
+                    else:
+                        # જો API કનેક્ટ ના હોય તો સાદો QR
+                        MY_UPI_ID = "dineshmakwna123@oksbi"
+                        upi_qr_url = f"upi://pay?pa={MY_UPI_ID}&pn=JayPhotography&am={float(total_price):.2f}&cu=INR&tn=PhotoDownload"
+                        pay_qr = qrcode.make(upi_qr_url)
+                        pay_qr_arr = np.array(pay_qr.convert('RGB'))
+                        st.sidebar.image(pay_qr_arr, caption="📱 UPI થી સ્કેન કરો", width=180)
 
-                    # Razorpay Checkout Options
-                    razorpay_options = {
-                        "key": st.secrets["razorpay_key_id"],
-                        "amount": str(amount_paise),
-                        "currency": "INR",
-                        "name": "તમારી એપનું નામ",
-                        "description": "Photo Download Payment",
-                        "order_id": order_id,
-                        "prefill": {
-                            "name": "",
-                            "email": "",
-                            "contact": ""
-                        },
-                        "theme": {
-                            "color": "#3399cc"
-                        }
-                    }
-
-                    # JavaScript થી Razorpay Checkout ખોલો
-                    razorpay_js = f"""
-                    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-                    <script>
-                    var options = {json.dumps(razorpay_options)};
-                    options.handler = function(response) {{
-                        // પેમેન્ટ સફળ થતાં જ query param સેટ કરીને rerun કરો
-                        const params = new URLSearchParams(window.location.search);
-                        params.set("razorpay_payment_id", response.razorpay_payment_id);
-                        params.set("razorpay_order_id", response.razorpay_order_id);
-                        params.set("razorpay_signature", response.razorpay_signature);
-                        window.location.search = params.toString();
-                    }};
-                    var rzp = new Razorpay(options);
-                    rzp.open();
-                    </script>
-                    """
-                    st.sidebar.markdown(razorpay_js, unsafe_allow_html=True)
-                    st.sidebar.button("💳 Razorpay થી પેમેન્ટ કરો", on_click=None)  # ખાલી બટન, JS ચલાવવા માટે
-
-                    # પેમેન્ટ કન્ફર્મ બટન
-                    # app ની શરૂઆતમાં અથવા યોગ્ય જગ્યાએ
-                    query_params = st.query_params
-                    if "razorpay_payment_id" in query_params:
-                        payment_id = query_params["razorpay_payment_id"]
-                        # અહીં પેમેન્ટ સફળ માનીને તમારું કામ કરો
+                    if st.sidebar.button("✅ પેમેન્ટ થઈ ગયું! (ફોટા મેળવો)", key="payment_done_btn", use_container_width=True):
                         unique_persons = set(item['person'] for item in cart)
                         persons_text = ", ".join(unique_persons)
                         send_telegram_message(
@@ -1042,21 +1013,17 @@ elif option == "🔍 ફોટો શોધો":
                             f"📸 ઇવેન્ટ: {event_name}\n"
                             f"👤 ગ્રાહક: {persons_text}\n"
                             f"💵 રકમ: ₹{total_price}\n"
-                            f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}\n"
-                            f"🧾 Razorpay Payment ID: {payment_id}"
+                            f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
                         )
                         st.session_state.payment_done = True
                         st.session_state.show_checkout = False
-                        # Query params સાફ કરો
-                        st.query_params.clear()
                         st.rerun()
 
-            # ૨. ડાઉનલોડ અને શેરિંગ બટનો (હવે Google Drive માંથી સાચી ZIP બનશે)
+            # ૨. ડાઉનલોડ અને શેરિંગ બટનો (સાચી ZIP ફાઈલ બનશે)
             if is_ready_to_download:
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
                 
-                # ZIP ડાઉનલોડ (Drive + Local બંનેમાંથી ફોટા લેશે)
                 import zipfile, io
                 zip_buffer = io.BytesIO()
                 has_files = False
@@ -1067,7 +1034,6 @@ elif option == "🔍 ફોટો શોધો":
                         filename = item.get("filename", "photo.jpg")
                         file_bytes = None
                         
-                        # ૧. પહેલા Google Drive માંથી ફોટો મેળવો
                         if file_id:
                             try:
                                 d_url = f"https://drive.google.com/uc?export=download&id={file_id}"
@@ -1077,14 +1043,12 @@ elif option == "🔍 ફોટો શોધો":
                             except:
                                 pass
                         
-                        # ૨. જો Drive પર ના મળે તો લોકલમાંથી ફોટો મેળવો
                         if not file_bytes:
                             local_p = os.path.join("events", event_name, "images", filename)
                             if os.path.exists(local_p):
                                 with open(local_p, "rb") as f:
                                     file_bytes = f.read()
                                     
-                        # ZIP માં ફોટો ઉમેરો
                         if file_bytes:
                             zip_file.writestr(filename, file_bytes)
                             has_files = True
@@ -1107,7 +1071,7 @@ elif option == "🔍 ફોટો શોધો":
                         d_link = f"https://drive.google.com/uc?export=download&id={file_id}"
                         st.sidebar.markdown(f"📸 [{filename} ડાઉનલોડ કરો]({d_link})")
 
-                # 📤 શેરિંગ બટન્સ
+                # શેરિંગ બટન્સ
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
                 app_url = "https://jayphotofinder.streamlit.app"
