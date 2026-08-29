@@ -254,10 +254,30 @@ def save_event_data(event_name, data):
 # ============================================================
 # 7️⃣ INSIGHTFACE
 # ============================================================
+import os
+import urllib.request
+import zipfile
+import insightface
+from insightface.app import FaceAnalysis
+import streamlit as st
+
+MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+MODEL_DIR = os.path.expanduser("~/.insightface/models/buffalo_l")
+
+def download_model():
+    os.makedirs(os.path.dirname(MODEL_DIR), exist_ok=True)
+    if not os.path.exists(MODEL_DIR):
+        zip_path = os.path.join(os.path.dirname(MODEL_DIR), "buffalo_l.zip")
+        urllib.request.urlretrieve(MODEL_URL, zip_path)
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(os.path.dirname(MODEL_DIR))
+        os.remove(zip_path)
+
 @st.cache_resource
 def load_insightface():
-    app = FaceAnalysis(name='buffalo_l', root='insightface_models')
-    app.prepare(ctx_id=0, det_size=(640, 640))
+    download_model()
+    app = FaceAnalysis(name='buffalo_l')
+    app.prepare(ctx_id=-1, det_size=(640, 640))  # CPU માટે -1
     return app
 
 app = load_insightface()
