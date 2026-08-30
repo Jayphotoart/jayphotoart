@@ -20,6 +20,30 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+# એડમિન પાસવર્ડ લોગિન સિસ્ટમ
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
+
+def admin_login():
+    st.subheader("એડમિન લૉગિન")
+    input_pwd = st.text_input("એડમિન પાસવર્ડ નાખો:", type="password")
+    
+    if st.button("Login"):
+        # secrets.toml માંથી પાસવર્ડ મેળવો
+        if input_pwd == st.secrets["admin_password"]:
+            st.session_state.admin_logged_in = True
+            st.rerun()
+        else:
+            st.error("ખોટો પાસવર્ડ!")
+
+# જો એડમિન લોગિન ન હોય તો આગળનો કોડ ન ચલાવો (stop કરો)
+if not st.session_state.admin_logged_in:
+    admin_login()
+    st.stop()  # આનાથી પાસવર્ડ વગર એડમિન પેજ નહીં દેખાય
+
+# અહીં તમારો એડમિન પેજનો કોડ આવશે (ફોટો અપલોડ, ક્યૂઆર જનરેટ વગેરે)
+st.title("એડમિન ડેશબોર્ડ")
+
 # ============================================================
 # 2️⃣ SESSION STATE INIT
 # ============================================================
@@ -278,7 +302,7 @@ with col2:
 query_params = st.query_params
 event_name_from_url = query_params.get("event")
 
-# જો લિંકમાં event= આવે તો સીધું ગ્રાહક મોડ ચાલુ થશે
+# જો QR સ્કેન દ્વારા ગ્રાહક આવે તો ફક્ત કસ્ટમર વ્યૂ બતાવો
 if event_name_from_url:
     is_client_mode = True
 else:
@@ -308,7 +332,7 @@ if option == "🔒 એડમિન લૉગિન":
     admin_input = st.text_input("🔑 એડમિન પાસવર્ડ:", type="password", key="main_admin_pass")
     
     if st.button("🚪 પ્રવેશ કરો", key="main_admin_login_btn"):
-        correct_password = st.secrets.get("admin_password", "JayPhotoArt@2026")
+        correct_password = st.secrets.get("admin_password")
         if admin_input.strip() == correct_password.strip():
             st.session_state.admin_logged_in = True
             st.success("✅ એડમિન લૉગિન સફળ!")
