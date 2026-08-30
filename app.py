@@ -393,7 +393,7 @@ def check_admin_password():
     admin_pass = st.text_input("🔑 એડમિન પાસવર્ડ:", type="password", key="admin_password_input")
     
     # Secrets માંથી અથવા ડિફોલ્ટ પાસવર્ડ ચેક કરો
-    correct_pass = st.secrets.get("admin_password", "JayPhotoArt@2026")
+    correct_pass = st.secrets.get("Admin Password Configuration", "admin_password")
     
     if st.button("🚪 એડમિન લૉગિન કરો"):
         if admin_pass.strip() == correct_pass.strip():
