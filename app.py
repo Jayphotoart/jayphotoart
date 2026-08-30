@@ -20,29 +20,49 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# એડમિન પાસવર્ડ લોગિન સિસ્ટમ
-if "admin_logged_in" not in st.session_state:
-    st.session_state.admin_logged_in = False
+# ==========================================
+# 🔐 LOAD CONFIGURATION & SECRETS SAFELY
+# ==========================================
 
-def admin_login():
-    st.subheader("એડમિન લૉગિન")
-    input_pwd = st.text_input("એડમિન પાસવર્ડ નાખો:", type="password")
+try:
+    # 1. Admin Password
+    ADMIN_PASSWORD = st.secrets["admin_password"]
+
+    # 2. OAuth Details (Dictionary)
+    OAUTH_CONFIG = st.secrets["oauth"]
+    OAUTH_CLIENT_ID = OAUTH_CONFIG["client_id"]
+    OAUTH_CLIENT_SECRET = OAUTH_CONFIG["client_secret"]
+
+    # 3. GCP Service Account (Credentials Dict)
+    # GCP લાઈબ્રેરી dict સ્વીકારે છે, તેથી તેને dict ફોર્મેટમાં લોડ કર્યું છે
+    GCP_CREDENTIALS_DICT = dict(st.secrets["gcp_service_account"])
+
+    # 4. Telegram Details
+    TELEGRAM_CONFIG = st.secrets["telegram"]
+    TELEGRAM_BOT_TOKEN = TELEGRAM_CONFIG["bot_token"]
+    TELEGRAM_CHAT_ID = TELEGRAM_CONFIG["chat_id"]
+
+    # 5. Razorpay Test Credentials
+    RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
+    RAZORPAY_KEY_SECRET = st.secrets.get("razorpay_key_secret", "")
     
-    if st.button("Login"):
-        # secrets.toml માંથી પાસવર્ડ મેળવો
-        if input_pwd == st.secrets["admin_password"]:
-            st.session_state.admin_logged_in = True
-            st.rerun()
-        else:
-            st.error("ખોટો પાસવર્ડ!")
+except KeyError as e:
+    st.error(f"⚠️ Secrets.toml માં કી ખૂટે છે: {e}")
+    st.info("કૃપા કરીને .streamlit/secrets.toml ફાઈલ યોગ્ય રીતે સેટ કરો.")
+    st.stop()
+#===========================================================
+    import streamlit as st
+    import razorpay
 
-# જો એડમિન લોગિન ન હોય તો આગળનો કોડ ન ચલાવો (stop કરો)
-if not st.session_state.admin_logged_in:
-    admin_login()
-    st.stop()  # આનાથી પાસવર્ડ વગર એડમિન પેજ નહીં દેખાય
+    # --- SECRETS માંથી RAZORPAY સેટઅપ કરો ---
+    try:
+        RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
+        RAZORPAY_KEY_SECRET = st.secrets["razorpay_key_secret"]
+        razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+    except Exception as e:
+        st.error(f"Razorpay Setup Error: {e}")
+    
 
-# અહીં તમારો એડમિન પેજનો કોડ આવશે (ફોટો અપલોડ, ક્યૂઆર જનરેટ વગેરે)
-st.title("એડમિન ડેશબોર્ડ")
 
 # ============================================================
 # 2️⃣ SESSION STATE INIT
@@ -781,31 +801,69 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                     st.sidebar.markdown("---")
                     st.sidebar.markdown(f"### 💳 પેમેન્ટ કરો: ₹{total_price}")
                     
-                    MY_UPI_ID = "dineshmakwna123@oksbi"
-                    upi_qr_url = f"upi://pay?pa={MY_UPI_ID}&pn=JayPhotography&am={float(total_price):.2f}&cu=INR&tn=PhotoDownload"
-                    pay_qr = qrcode.make(upi_qr_url)
-                    pay_qr_arr = np.array(pay_qr.convert('RGB'))
-                    st.sidebar.image(pay_qr_arr, caption="📱 કોઈપણ UPI એપથી સ્કેન કરો", width=180)
-                    st.sidebar.caption(f"UPI ID: `{MY_UPI_ID}`")
+                    # -------------------------------------------------------------
+                    # સ્ટેપ ૧: ગ્રાહકે ફોટા શોધીને પસંદ (Select) કરી લીધા
+                    # -------------------------------------------------------------
+                    selected_photos = [...] # ગ્રાહકે પસંદ કરેલા ફોટા
 
-                    st.sidebar.markdown("---")
-                    st.sidebar.markdown("##### 📝 પેમેન્ટ વિગત ભરો:")
-                    txn_id = st.sidebar.text_input("UPI Reference / UTR No (12 આંકડા):", key="client_txn_id", placeholder="દા.ત. 423589123456")
+                    if selected_photos:
+                        st.write(f"તમે {len(selected_photos)} ફોટા પસંદ કર્યા છે.")
+                        
+                        # Session State સેટ કરો
+                        if "payment_done" not in st.session_state:
+                            st.session_state.payment_done = False
+                        if "payment_link_id" not in st.session_state:
+                            st.session_state.payment_link_id = None
 
-                    # 🔥 UTR નંબર નાખશે તો જ ડાઉનલોડ ખુલશે
-                    if st.sidebar.button("✅ વેરિફાય કરો & ફોટા મેળવો", key="payment_done_btn", use_container_width=True):
-                        if len(txn_id.strip()) >= 6:
-                            unique_persons = set(item['person'] for item in cart)
-                            persons_text = ", ".join(unique_persons)
+                        # -------------------------------------------------------------
+                        # સ્ટેપ ૨: 📍 RAZORPAY પેમેન્ટ સેક્શન (અહીં મૂકવો)
+                        # -------------------------------------------------------------
+                        if not st.session_state.payment_done:
+                            st.subheader("💳 પેમેન્ટ કરો")
+                            
+                            # પેમેન્ટ લિંક જનરેટ કરવાનું બટન
+                            if st.session_state.payment_link_id is None:
+                                if st.button("પેમેન્ટ લિંક મેળવો"):
+                                    link_data = {
+                                        "amount": 10000,  # ₹100 = 10000 પૈસા (તમારી કિંમત મુજબ બદલો)
+                                        "currency": "INR",
+                                        "description": "ફોટો ડાઉનલોડ ફી",
+                                    }
+                                    res = razorpay_client.payment_link.create(link_data)
+                                    st.session_state.payment_link_id = res["id"]
+                                    st.session_state.payment_url = res["short_url"]
+                                    st.rerun()
+
+                            # લિંક બતાવો અને વેરિફાય કરો
+                            if st.session_state.payment_link_id:
+                                st.markdown(f"### [👉 અહીં ક્લિક કરીને પેમેન્ટ પૂર્ણ કરો]({st.session_state.payment_url})")
+                                
+                                if st.button("🔄 મેં પેમેન્ટ કરી દીધું છે (Verify)"):
+                                    check_status = razorpay_client.payment_link.fetch(st.session_state.payment_link_id)
+                                    if check_status.get("status") == "paid":
+                                        st.session_state.payment_done = True
+                                        st.success("✅ પેમેન્ટ સફળ થયું!")
+                                        st.rerun()
+                                    else:
+                                        st.error("⚠️ પેમેન્ટ હજુ અધૂરું છે.")
+
+                        # -------------------------------------------------------------
+                        # સ્ટેપ ૩: ડાઉનલોડ સેક્શન (માત્ર પેમેન્ટ થાય પછી જ દેખાશે)
+                        # -------------------------------------------------------------
+                        if st.session_state.payment_done:
+                            st.success("🎉 હવે તમે ફોટા ડાઉનલોડ કરી શકો છો!")
+                            st.download_button(
+                                label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
+                                file_name="my_photos.zip",
+                                mime="application/zip"
+                            )
                             
                             # Telegram પર UTR નંબર સાથે મેસેજ મોકલો
                             msg_sent = send_telegram_message(
                                 f"💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n"
-                                f"📸 ઇવેન્ટ: {event_name}\n"
-                                f"👤 ગ્રાહક: {persons_text}\n"
+                                f"📸 ઇવેન્ટ: {event_name}\n"        
                                 f"🖼️ ફોટા સંખ્યા: {len(cart)}\n"
                                 f"💵 રકમ: ₹{total_price}\n"
-                                f"🧾 <b>UTR / Ref No:</b> <code>{txn_id.strip()}</code>\n"
                                 f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
                             )
                             if msg_sent:
