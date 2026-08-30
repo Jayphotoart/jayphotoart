@@ -29,8 +29,8 @@ if "cart" not in st.session_state:
     st.session_state.cart = []
 if "payment_done" not in st.session_state:
     st.session_state.payment_done = False
-if "admin_authenticated" not in st.session_state:
-    st.session_state.admin_authenticated = False
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
 if "show_checkout" not in st.session_state:
     st.session_state.show_checkout = False
 
@@ -70,7 +70,7 @@ def get_drive_service():
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
         return build('drive', 'v3', credentials=creds)
-    except Exception as e:
+    except Exception:
         return None
 
 def get_drive_folder_id(event_name):
@@ -142,7 +142,7 @@ def save_event_data_to_drive(event_name, data, folder_id):
         return False
 
 # ============================================================
-# 5️⃣ EVENT MANAGEMENT & SYNC FUNCTIONS
+# 5️⃣ EVENT DATA SYNC FUNCTIONS
 # ============================================================
 def get_event_dir(event_name):
     base = "events"
@@ -239,7 +239,7 @@ def parse_embedding(embedding_data):
     return None
 
 # ============================================================
-# 6️⃣ INSIGHTFACE
+# 6️⃣ INSIGHTFACE MODEL
 # ============================================================
 @st.cache_resource
 def load_insightface():
@@ -250,7 +250,7 @@ def load_insightface():
 app = load_insightface()
 
 # ============================================================
-# 7️⃣ PAGE CONFIG & UI SETUP
+# 7️⃣ PAGE CONFIG & HEADER
 # ============================================================
 st.set_page_config(page_title="જય ફોટો શોધ", page_icon="📸", layout="wide")
 
@@ -262,7 +262,7 @@ with col1:
         st.markdown("## 📸")
 with col2:
     st.markdown("""
-    <div class="brand-text" style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+    <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
         <h1 style="font-size: 2.5rem; font-weight: 900; color: #0f0f0f; margin: 0;">
             JAY <span style="color: #d4af37;">PHOTO</span> SHODH
         </h1>
@@ -273,41 +273,55 @@ with col2:
     """, unsafe_allow_html=True)
 
 # ============================================================
-# 8️⃣ SIDEBAR NAVIGATION (ગ્રાહક અને એડમિન માટે સુરક્ષિત મેનૂ)
+# 8️⃣ SMART NAVIGATION (ગ્રાહક અને એડમિન માટે અલગ રસ્તા)
 # ============================================================
-# જો એડમિન લૉગિન થયેલું હોય તો જ બધા પેજ દેખાશે
-if st.session_state.admin_authenticated:
-    menu_options = ["🔍 ફોટો શોધો", "📂 ઇવેન્ટ મેનેજ", "📱 QR કોડ બનાવો"]
-else:
-    menu_options = ["🔍 ફોટો શોધો"]
+query_params = st.query_params
+event_name_from_url = query_params.get("event")
 
-option = st.sidebar.selectbox("📌 પેજ પસંદ કરો", menu_options)
-
-st.sidebar.markdown("---")
-# એડમિન લૉગિન / લૉગઆઉટ સેક્શન
-if not st.session_state.admin_authenticated:
-    with st.sidebar.expander("🔒 એડમિન લૉગિન"):
-        admin_pass = st.text_input("એડમિન પાસવર્ડ:", type="password", key="admin_sidebar_pass")
-        if st.button("🔑 લૉગિન કરો", key="admin_login_btn"):
-            correct_pass = st.secrets.get("admin_password", "JayPhotoArt@2026")
-            if admin_pass.strip() == correct_pass.strip():
-                st.session_state.admin_authenticated = True
-                st.success("✅ એડમિન પ્રવેશ મળ્યો!")
-                st.rerun()
-            else:
-                st.error("❌ ખોટો પાસવર્ડ!")
+# જો લિંકમાં event= આવે તો સીધું ગ્રાહક મોડ ચાલુ થશે
+if event_name_from_url:
+    is_client_mode = True
 else:
-    st.sidebar.success("👑 એડમિન મોડ ચાલુ છે")
-    if st.sidebar.button("🚪 એડમિન લૉગઆઉટ", key="admin_logout_btn"):
-        st.session_state.admin_authenticated = False
-        st.rerun()
+    is_client_mode = False
+
+# સાઇડબાર મેનૂ
+if is_client_mode:
+    option = "🔍 ફોટો શોધો"
+    st.sidebar.info("📱 ગ્રાહક ફોટો શોધ મોડ")
+else:
+    if st.session_state.admin_logged_in:
+        option = st.sidebar.selectbox("📌 એડમિન મેનૂ", ["📂 ઇવેન્ટ મેનેજ", "📱 QR કોડ બનાવો", "🔍 ફોટો શોધો ટેસ્ટિંગ"])
+        if st.sidebar.button("🚪 એડમિન લૉગઆઉટ"):
+            st.session_state.admin_logged_in = False
+            st.rerun()
+    else:
+        option = "🔒 એડમિન લૉગિન"
+
+# ============================================================
+# 🔒 ADMIN LOGIN PAGE (એપ ખુલતાં જ સૌથી પહેલાં પાસવર્ડ પૂછશે)
+# ============================================================
+if option == "🔒 એડમિન લૉગિન":
+    st.markdown("---")
+    st.markdown("### 🔒 એડમિન પેનલ લૉગિન")
+    st.caption("ઇવેન્ટ મેનેજ કરવા અથવા QR કોડ બનાવવા માટે એડમિન પાસવર્ડ નાખો.")
+    
+    admin_input = st.text_input("🔑 એડમિન પાસવર્ડ:", type="password", key="main_admin_pass")
+    
+    if st.button("🚪 પ્રવેશ કરો", key="main_admin_login_btn"):
+        correct_password = st.secrets.get("admin_password", "JayPhotoArt@2026")
+        if admin_input.strip() == correct_password.strip():
+            st.session_state.admin_logged_in = True
+            st.success("✅ એડમિન લૉગિન સફળ!")
+            st.rerun()
+        else:
+            st.error("❌ ખોટો એડમિન પાસવર્ડ!")
 
 # ============================================================
 # PAGE 1: MANAGE EVENTS (માત્ર એડમિન માટે)
 # ============================================================
-if option == "📂 ઇવેન્ટ મેનેજ":
-    if not st.session_state.admin_authenticated:
-        st.error("❌ આ પેજ ખોલવા માટે એડમિન લૉગિન જરૂરી છે.")
+elif option == "📂 ઇવેન્ટ મેનેજ":
+    if not st.session_state.admin_logged_in:
+        st.error("❌ આ પેજ માટે એડમિન લૉગિન જરૂરી છે.")
         st.stop()
 
     st.markdown("### 📂 ઇવેન્ટ મેનેજમેન્ટ")
@@ -386,7 +400,7 @@ if option == "📂 ઇવેન્ટ મેનેજ":
                             pad = 20
                             h, w = img.shape[:2]
                             x1 = max(0, x1 - pad)
-                            y1 = max(0, x1 - pad)
+                            y1 = max(0, y1 - pad)
                             x2 = min(w, x2 + pad)
                             y2 = min(h, y2 + pad)
                             face_crop = img[y1:y2, x1:x2]
@@ -440,7 +454,7 @@ if option == "📂 ઇવેન્ટ મેનેજ":
                     st.success(f"✅ {processed_count} નવા ફોટા ઉમેરાઈ ગયા! (ઓટો-સેવ: {auto_saved_count})")
                     st.rerun()
 
-            # ---------- SMART GROUP LABELING ----------
+            # SMART GROUP LABELING
             if st.session_state.pending_faces:
                 folder_id = get_drive_folder_id(selected_event.strip())
                 st.subheader(f"🏷️ {len(st.session_state.pending_faces)} નવા ચહેરાઓને નામ આપો")
@@ -523,21 +537,15 @@ if option == "📂 ઇવેન્ટ મેનેજ":
                     st.success(f"✅ {count} નવા ચહેરા સફળતાપૂર્વક ઉમેરાઈ ગયા!")
                     st.rerun()
 
-            st.divider()
-            event_data = load_event_data_local(selected_event.strip())
-            faces_list = event_data.get("faces", [])
-            st.write(f"📊 આ ઇવેન્ટમાં કુલ **{len(faces_list)}** લેબલ કરેલા ફોટા છે.")
-
 # ============================================================
 # PAGE 2: QR CODE GENERATE (માત્ર એડમિન માટે)
 # ============================================================
 elif option == "📱 QR કોડ બનાવો":
-    if not st.session_state.admin_authenticated:
-        st.error("❌ આ પેજ ખોલવા માટે એડમિન લૉગિન જરૂરી છે.")
+    if not st.session_state.admin_logged_in:
+        st.error("❌ આ પેજ માટે એડમિન લૉગિન જરૂરી છે.")
         st.stop()
 
     st.markdown("### 📱 QR કોડ બનાવો")
-    
     events = list_all_local_events()
     if not events:
         st.warning("⚠️ હજુ સુધી કોઈ ઇવેન્ટ નથી. કૃપા કરીને '📂 ઇવેન્ટ મેનેજ' માં પહેલાં ઇવેન્ટ બનાવો.")
@@ -563,26 +571,17 @@ elif option == "📱 QR કોડ બનાવો":
                 )
             with col2:
                 st.info("💡 કેવી રીતે વાપરવું?")
-                st.write("1. આ QR કોડ પ્રિન્ટ કરીને મૂકો.")
-                st.write("2. ગ્રાહકો સ્કેન કરશે એટલે સીધા તેમના જ ફોટા મળશે.")
+                st.write("1. આ QR કોડ પ્રિન્ટ કરીને ઇવેન્ટમાં મૂકો.")
+                st.write("2. ગ્રાહકો સ્કેન કરશે એટલે સીધા ગ્રાહક પેજ પર જશે.")
 
 # ============================================================
 # PAGE 3: CLIENT SEARCH (ગ્રાહક માટેનું મુખ્ય પેજ)
 # ============================================================
-elif option == "🔍 ફોટો શોધો":
-    query_params = st.query_params
-    event_name_from_url = query_params.get("event")
-
+elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો શોધો ટેસ્ટિંગ":
     if event_name_from_url:
         event_name = urllib.parse.unquote(str(event_name_from_url)).strip()
     else:
-        st.markdown("""
-        <div class="card">
-            <div class="card-title">🔍 તમારા ફોટા શોધો</div>
-            <div class="card-desc">કૃપા કરીને QR કોડ સ્કેન કરો અથવા નીચેથી ઇવેન્ટ પસંદ કરો.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("### 🔍 તમારા ફોટા શોધો")
         available_events = list_all_local_events()
         if available_events:
             event_name = st.selectbox("📁 ઇવેન્ટ પસંદ કરો", available_events)
@@ -723,7 +722,7 @@ elif option == "🔍 ફોટો શોધો":
                             st.warning("⚠️ આ ઇવેન્ટમાંથી તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
 
         # ============================================================
-        # 🛒 CART DISPLAY & PAYMENT (સાઇડબાર)
+        # 🛒 CART DISPLAY & SECURE UPI PAYMENT (સાઇડબાર)
         # ============================================================
         st.sidebar.markdown("---")
         st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
@@ -749,7 +748,7 @@ elif option == "🔍 ફોટો શોધો":
 
             is_ready_to_download = (total_price == 0) or st.session_state.get("payment_done", False)
 
-            # ૧. પેમેન્ટ સેક્શન
+            # ૧. પેમેન્ટ સેક્શન (સુરક્ષિત UTR વેરિફિકેશન સાથે)
             if total_price > 0 and not st.session_state.get("payment_done", False):
                 if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
                     st.session_state.show_checkout = True
@@ -765,26 +764,34 @@ elif option == "🔍 ફોટો શોધો":
                     st.sidebar.image(pay_qr_arr, caption="📱 કોઈપણ UPI એપથી સ્કેન કરો", width=180)
                     st.sidebar.caption(f"UPI ID: `{MY_UPI_ID}`")
 
-                    # પેમેન્ટ કન્ફર્મેશન
-                    if st.sidebar.button("✅ પેમેન્ટ થઈ ગયું! (ફોટા મેળવો)", key="payment_done_btn", use_container_width=True):
-                        unique_persons = set(item['person'] for item in cart)
-                        persons_text = ", ".join(unique_persons)
-                        
-                        # Telegram Notification
-                        msg_sent = send_telegram_message(
-                            f"🔔 <b>નવો ઓર્ડર & ડાઉનલોડ!</b>\n"
-                            f"📸 ઇવેન્ટ: {event_name}\n"
-                            f"👤 ગ્રાહક: {persons_text}\n"
-                            f"🖼️ ફોટા સંખ્યા: {len(cart)}\n"
-                            f"💵 રકમ: ₹{total_price}\n"
-                            f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
-                        )
-                        if msg_sent:
-                            st.sidebar.success("✅ ટેલિગ્રામ પર સૂચના મોકલાઈ ગઈ!")
+                    st.sidebar.markdown("---")
+                    st.sidebar.markdown("##### 📝 પેમેન્ટ વિગત ભરો:")
+                    txn_id = st.sidebar.text_input("UPI Reference / UTR No (12 આંકડા):", key="client_txn_id", placeholder="દા.ત. 423589123456")
+
+                    # 🔥 UTR નંબર નાખશે તો જ ડાઉનલોડ ખુલશે
+                    if st.sidebar.button("✅ વેરિફાય કરો & ફોટા મેળવો", key="payment_done_btn", use_container_width=True):
+                        if len(txn_id.strip()) >= 6:
+                            unique_persons = set(item['person'] for item in cart)
+                            persons_text = ", ".join(unique_persons)
                             
-                        st.session_state.payment_done = True
-                        st.session_state.show_checkout = False
-                        st.rerun()
+                            # Telegram પર UTR નંબર સાથે મેસેજ મોકલો
+                            msg_sent = send_telegram_message(
+                                f"💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n"
+                                f"📸 ઇવેન્ટ: {event_name}\n"
+                                f"👤 ગ્રાહક: {persons_text}\n"
+                                f"🖼️ ફોટા સંખ્યા: {len(cart)}\n"
+                                f"💵 રકમ: ₹{total_price}\n"
+                                f"🧾 <b>UTR / Ref No:</b> <code>{txn_id.strip()}</code>\n"
+                                f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
+                            )
+                            if msg_sent:
+                                st.sidebar.success("✅ પેમેન્ટ વિગત મોકલાઈ ગઈ!")
+                            
+                            st.session_state.payment_done = True
+                            st.session_state.show_checkout = False
+                            st.rerun()
+                        else:
+                            st.sidebar.error("❌ કૃપા કરીને પેમેન્ટ કર્યા પછી મળેલો સાચો 12 આંકડાનો UTR નંબર નાખો!")
 
             # ૨. ડાઉનલોડ અને શેરિંગ
             if is_ready_to_download:
@@ -863,7 +870,7 @@ elif option == "🔍 ફોટો શોધો":
 # FOOTER
 # ============================================================
 st.markdown("""
-<div class="footer" style="text-align: center; margin-top: 50px; color: #6c757d; font-size: 0.8rem;">
+<div style="text-align: center; margin-top: 50px; color: #6c757d; font-size: 0.8rem;">
     📸 <strong>જય ફોટો શોધ</strong> - AI દ્વારા તમારા ફોટા શોધો<br>
     © 2026 Jay Photography | Made with ❤️ in Gujarat
 </div>
