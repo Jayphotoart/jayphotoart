@@ -1,26 +1,20 @@
 # ============================================================
-# 1️⃣ IMPORTS (સૌથી ઉપર)
+# 1️⃣ IMPORTS
 # ============================================================
 import streamlit as st
 import cv2
 import numpy as np
 import json
-import socket
 import qrcode
 import os
 import shutil
 import hashlib
 import datetime
 import tempfile
-import faiss
 import requests
 import urllib.parse
-import csv
-import pandas as pd
-import pickle
-from insightface.app import FaceAnalysis
-from face_search import find_best_global_assignment
 from PIL import Image
+from insightface.app import FaceAnalysis
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -35,19 +29,35 @@ if "cart" not in st.session_state:
     st.session_state.cart = []
 if "payment_done" not in st.session_state:
     st.session_state.payment_done = False
+if "admin_authenticated" not in st.session_state:
+    st.session_state.admin_authenticated = False
+if "show_checkout" not in st.session_state:
+    st.session_state.show_checkout = False
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"
+PHOTO_PRICE = 10
 
 # ============================================================
-# 3️⃣ CONSTANTS (ROOT_FOLDER_ID અહીં વ્યાખ્યાયિત કરો)
+# 3️⃣ TELEGRAM NOTIFICATION FUNCTION
 # ============================================================
-ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"  # <--- તમારો Shared Drive ફોલ્ડર ID
+def send_telegram_message(message):
+    try:
+        token = st.secrets.get("telegram", {}).get("bot_token")
+        chat_id = st.secrets.get("telegram", {}).get("chat_id")
+        if not token or not chat_id:
+            return False
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
+        resp = requests.post(url, json=payload, timeout=8)
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 # ============================================================
-# 4️⃣ GOOGLE DRIVE OAuth FUNCTION (લાઇન 48 પહેલાં આવવું જોઈએ)
+# 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
 # ============================================================
 def get_drive_service():
-    """OAuth 2.0 (st.secrets માંથી refresh_token) વાપરીને Drive service આપે છે"""
     try:
         creds = Credentials(
             token=None,
@@ -57,19 +67,12 @@ def get_drive_service():
             token_uri="https://oauth2.googleapis.com/token",
             scopes=["https://www.googleapis.com/auth/drive.file"]
         )
-        
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-        
         return build('drive', 'v3', credentials=creds)
-    
     except Exception as e:
-        st.error(f"❌ OAuth Error: {e}")
         return None
 
-# ============================================================
-# 5️⃣ DRIVE HELPER & SYNC FUNCTIONS (Google Drive સાથે લિંક)
-# ============================================================
 def get_drive_folder_id(event_name):
     try:
         drive_service = get_drive_service()
@@ -93,8 +96,7 @@ def get_drive_folder_id(event_name):
                 body=folder_metadata, fields='id', supportsAllDrives=True
             ).execute()
             return folder.get('id')
-    except Exception as e:
-        st.error(f"❌ Drive folder error: {e}")
+    except Exception:
         return None
 
 def upload_to_drive(file_path, folder_id):
@@ -111,8 +113,7 @@ def upload_to_drive(file_path, folder_id):
             body=file_metadata, media_body=media, fields='id', supportsAllDrives=True
         ).execute()
         return file.get('id')
-    except Exception as e:
-        st.error(f"❌ Drive upload error: {e}")
+    except Exception:
         return None
 
 def save_event_data_to_drive(event_name, data, folder_id):
@@ -137,12 +138,11 @@ def save_event_data_to_drive(event_name, data, folder_id):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         return True
-    except Exception as e:
-        st.error(f"❌ Drive save error: {e}")
+    except Exception:
         return False
 
 # ============================================================
-# 6️⃣ EVENT ડેટા લોડ અને લિસ્ટ (Drive + Local એકસાથે)
+# 5️⃣ EVENT MANAGEMENT & SYNC FUNCTIONS
 # ============================================================
 def get_event_dir(event_name):
     base = "events"
@@ -158,14 +158,11 @@ def save_event_data_local(event_name, data):
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
-    except Exception as e:
+    except Exception:
         return False
 
-# 🔥 ગૂગલ ડ્રાઈવમાંથી બધી જૂની ઇવેન્ટ્સનું લિસ્ટ મેળવવાનું ફંક્શન
 def list_all_local_events():
     events_set = set()
-    
-    # ૧. પહેલા Google Drive પરથી બધી ઇવેન્ટ્સ શોધો
     try:
         drive_service = get_drive_service()
         if drive_service:
@@ -179,7 +176,6 @@ def list_all_local_events():
     except Exception:
         pass
 
-    # ૨. જો લોકલ ફોલ્ડરમાં કોઈ ઇવેન્ટ હોય તો તે પણ ઉમેરો
     base = "events"
     if os.path.exists(base):
         for item in os.listdir(base):
@@ -188,12 +184,10 @@ def list_all_local_events():
 
     return sorted(list(events_set))
 
-# 🔥 ગૂગલ ડ્રાઈવ + લોકલ બંનેમાંથી ડેટા લોડ કરવાનું ફંક્શન
 def load_event_data_local(event_name):
     event_path, _ = get_event_dir(event_name)
     json_path = os.path.join(event_path, "data.json")
     
-    # જો લોકલ ફાઈલ ના હોય (સર્વર રીસ્ટાર્ટ થયું હોય), તો Drive માંથી ડાઉનલોડ કરો
     if not os.path.exists(json_path):
         try:
             folder_id = get_drive_folder_id(event_name)
@@ -212,7 +206,6 @@ def load_event_data_local(event_name):
         except Exception:
             pass
 
-    # હવે JSON વાંચો
     try:
         if os.path.exists(json_path):
             with open(json_path, "r", encoding="utf-8") as f:
@@ -245,99 +238,21 @@ def parse_embedding(embedding_data):
         return embedding_data
     return None
 
-def load_event_data(event_name):
-    return load_event_data_local(event_name)
-
-def save_event_data(event_name, data):
-    return save_event_data_local(event_name, data)
-
 # ============================================================
-# 7️⃣ INSIGHTFACE
+# 6️⃣ INSIGHTFACE
 # ============================================================
-import os
-import urllib.request
-import zipfile
-import insightface
-from insightface.app import FaceAnalysis
-import streamlit as st
-
-MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
-MODEL_DIR = os.path.expanduser("~/.insightface/models/buffalo_l")
-
-def download_model():
-    os.makedirs(os.path.dirname(MODEL_DIR), exist_ok=True)
-    if not os.path.exists(MODEL_DIR):
-        zip_path = os.path.join(os.path.dirname(MODEL_DIR), "buffalo_l.zip")
-        urllib.request.urlretrieve(MODEL_URL, zip_path)
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(os.path.dirname(MODEL_DIR))
-        os.remove(zip_path)
-
 @st.cache_resource
 def load_insightface():
-    download_model()
-    app = FaceAnalysis(name='buffalo_l')
-    app.prepare(ctx_id=-1, det_size=(640, 640))  # CPU માટે -1
+    app = FaceAnalysis(name='buffalo_l', root='insightface_models')
+    app.prepare(ctx_id=0, det_size=(640, 640))
     return app
 
 app = load_insightface()
-PHOTO_PRICE = 10
 
 # ============================================================
-# 8️⃣ PAGE CONFIG (st.set_page_config અહીં આવવું જોઈએ)
+# 7️⃣ PAGE CONFIG & UI SETUP
 # ============================================================
 st.set_page_config(page_title="જય ફોટો શોધ", page_icon="📸", layout="wide")
-
-# ============================================================
-# TELEGRAM NOTIFICATION FUNCTION (મેસેજ મોકલવા માટે)
-# ============================================================
-def send_telegram_message(message):
-    try:
-        TELEGRAM_BOT_TOKEN = st.secrets["telegram"]["bot_token"]
-        TELEGRAM_CHAT_ID = st.secrets["telegram"]["chat_id"]
-    except Exception:
-        return False
-
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-    try:
-        response = requests.post(url, json=payload, timeout=5)
-        return response.status_code == 200
-    except Exception:
-        return False
-
-# ============================================================
-# 9️⃣ TEST OAuth (હવે ફંક્શન્સ પછી)
-# ============================================================
-with st.expander("🧪 Test Google Drive Connection"):
-    if st.button("Test Drive Connection"):
-        service = get_drive_service()
-        if service:
-            st.success("✅ Drive service connected successfully!")
-            try:
-                results = service.files().list(
-                    q=f"'{ROOT_FOLDER_ID}' in parents and trashed=false",
-                    fields="files(id, name)",
-                    supportsAllDrives=True,
-                    includeItemsFromAllDrives=True
-                ).execute()
-                items = results.get('files', [])
-                st.write(f"📁 Found {len(items)} items in Shared Drive")
-                for item in items:
-                    st.write(f"  - {item['name']} ({item['id']})")
-            except Exception as e:
-                st.error(f"❌ Shared Drive access error: {e}")
-        else:
-            st.error("❌ Drive service connection failed!")
-
-# ============================================================
-# CSS, HEADER, SIDEBAR (એ જ રાખો, વધુ નહીં લખું)
-# ============================================================
-st.markdown("""<style> ... તમારું CSS અહીં મૂકો ... </style>""", unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 5])
 with col1:
@@ -348,75 +263,54 @@ with col1:
 with col2:
     st.markdown("""
     <div class="brand-text" style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
-        <h1 style="font-size: 2.8rem; font-weight: 900; color: #0f0f0f; margin: 0; letter-spacing: -1px;">
+        <h1 style="font-size: 2.5rem; font-weight: 900; color: #0f0f0f; margin: 0;">
             JAY <span style="color: #d4af37;">PHOTO</span> SHODH
         </h1>
-        <div style="font-size: 0.9rem; color: #6c757d; margin-top: -5px; font-weight: 400; letter-spacing: 2px;">
+        <div style="font-size: 0.85rem; color: #6c757d; letter-spacing: 2px;">
             ✨ AI POWERED PHOTO SEARCH
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-st.sidebar.image("assets/logo.jpg", width="stretch")
-st.sidebar.markdown("""
-<div style="text-align: center; padding: 0.5rem 0 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.5rem;">
-    <div style="color: white; font-weight: 800; font-size: 1.4rem; margin: 0; letter-spacing: 1px;">
-        JAY <span style="color: #d4af37;">PHOTO</span>
-    </div>
-    <div style="color: #adb5bd; font-size: 0.7rem; font-weight: 400; letter-spacing: 3px; margin-top: 2px;">
-        ART
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-option = st.sidebar.selectbox(
-    "📌 પેજ પસંદ કરો",
-    ["🔍 ફોટો શોધો", "📂 ઇવેન્ટ મેનેજ", "📱 QR કોડ બનાવો", "📊 Analytics", "📊 બેન્ચમાર્ક"],
-    format_func=lambda x: x
-)
-
 # ============================================================
-# PASSWORD PROTECTION (એડમિન લોગિન)
+# 8️⃣ SIDEBAR NAVIGATION (ગ્રાહક અને એડમિન માટે સુરક્ષિત મેનૂ)
 # ============================================================
-def check_admin_password():
-    """જો એડમિન લોગિન થયેલું હોય તો જ True આપે, નહીંતર પાસવર્ડ પૂછે"""
-    if st.session_state.get("admin_authenticated", False):
-        return True
-    
-    st.markdown("""
-    <div class="card">
-        <div class="card-title">🔒 એડમિન પેનલ લૉગિન</div>
-        <div class="card-desc">આ પેજ ખોલવા માટે કૃપા કરીને એડમિન પાસવર્ડ દાખલ કરો.</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    admin_pass = st.text_input("🔑 એડમિન પાસવર્ડ:", type="password", key="admin_password_input")
-    
-    # Secrets માંથી અથવા ડિફોલ્ટ પાસવર્ડ ચેક કરો
-    correct_pass = st.secrets.get("Admin Password Configuration", "admin_password")
-    
-    if st.button("🚪 એડમિન લૉગિન કરો"):
-        if admin_pass.strip() == correct_pass.strip():
-            st.session_state.admin_authenticated = True
-            st.success("✅ એડમિન લૉગિન સફળ!")
-            st.rerun()
-        else:
-            st.error("❌ ખોટો એડમિન પાસવર્ડ!")
-    return False
+# જો એડમિન લૉગિન થયેલું હોય તો જ બધા પેજ દેખાશે
+if st.session_state.admin_authenticated:
+    menu_options = ["🔍 ફોટો શોધો", "📂 ઇવેન્ટ મેનેજ", "📱 QR કોડ બનાવો"]
+else:
+    menu_options = ["🔍 ફોટો શોધો"]
+
+option = st.sidebar.selectbox("📌 પેજ પસંદ કરો", menu_options)
+
+st.sidebar.markdown("---")
+# એડમિન લૉગિન / લૉગઆઉટ સેક્શન
+if not st.session_state.admin_authenticated:
+    with st.sidebar.expander("🔒 એડમિન લૉગિન"):
+        admin_pass = st.text_input("એડમિન પાસવર્ડ:", type="password", key="admin_sidebar_pass")
+        if st.button("🔑 લૉગિન કરો", key="admin_login_btn"):
+            correct_pass = st.secrets.get("admin_password", "JayPhotoArt@2026")
+            if admin_pass.strip() == correct_pass.strip():
+                st.session_state.admin_authenticated = True
+                st.success("✅ એડમિન પ્રવેશ મળ્યો!")
+                st.rerun()
+            else:
+                st.error("❌ ખોટો પાસવર્ડ!")
+else:
+    st.sidebar.success("👑 એડમિન મોડ ચાલુ છે")
+    if st.sidebar.button("🚪 એડમિન લૉગઆઉટ", key="admin_logout_btn"):
+        st.session_state.admin_authenticated = False
+        st.rerun()
 
 # ============================================================
-# PAGE 1: MANAGE EVENTS (એડમિન પેજ - લૉક સાથે)
+# PAGE 1: MANAGE EVENTS (માત્ર એડમિન માટે)
 # ============================================================
 if option == "📂 ઇવેન્ટ મેનેજ":
-    if not check_admin_password():
-        st.stop()  # પાસવર્ડ સાચો ના પડે ત્યાં સુધી આગળ ન વધવા દો
+    if not st.session_state.admin_authenticated:
+        st.error("❌ આ પેજ ખોલવા માટે એડમિન લૉગિન જરૂરી છે.")
+        st.stop()
 
-    st.markdown("""
-    <div class="card">
-        <div class="card-title">📂 ઇવેન્ટ મેનેજમેન્ટ</div>
-        <div class="card-desc">અહીં તમે નવી ઇવેન્ટ બનાવી શકો છો અથવા જૂની ઇવેન્ટમાં નવા ફોટા ઉમેરી શકો છો.</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 📂 ઇવેન્ટ મેનેજમેન્ટ")
 
     with st.expander("➕ નવી ઇવેન્ટ બનાવો", expanded=False):
         new_event = st.text_input("ઇવેન્ટનું નામ (દા.ત., શર્મા_લગ્ન)")
@@ -445,7 +339,7 @@ if option == "📂 ઇવેન્ટ મેનેજ":
             
             event_data = load_event_data_local(event_name_clean)
             existing_faces = event_data.get("faces", [])
-            st.info(f"📊 આ ઇવેન્ટમાં અત્યારે કુલ **{len(existing_faces)}** ફોટા પહેલેથી સેવ છે.")
+            st.info(f"📊 આ ઇવેન્ટમાં અત્યારે કુલ **{len(existing_faces)}** ફોટા સેવ છે.")
        
             st.subheader(f"📸 નવા ફોટા ઉમેરો - {selected_event}")
             uploaded_files = st.file_uploader(
@@ -492,7 +386,7 @@ if option == "📂 ઇવેન્ટ મેનેજ":
                             pad = 20
                             h, w = img.shape[:2]
                             x1 = max(0, x1 - pad)
-                            y1 = max(0, y1 - pad)
+                            y1 = max(0, x1 - pad)
                             x2 = min(w, x2 + pad)
                             y2 = min(h, y2 + pad)
                             face_crop = img[y1:y2, x1:x2]
@@ -542,7 +436,6 @@ if option == "📂 ઇવેન્ટ મેનેજ":
                         save_event_data_to_drive(selected_event.strip(), event_data, folder_id)
 
                     st.cache_resource.clear()
-                    st.cache_data.clear()
                     status_text.empty()
                     st.success(f"✅ {processed_count} નવા ફોટા ઉમેરાઈ ગયા! (ઓટો-સેવ: {auto_saved_count})")
                     st.rerun()
@@ -627,7 +520,6 @@ if option == "📂 ઇવેન્ટ મેનેજ":
                             
                     st.session_state.pending_faces = []
                     st.cache_resource.clear()
-                    st.cache_data.clear()
                     st.success(f"✅ {count} નવા ચહેરા સફળતાપૂર્વક ઉમેરાઈ ગયા!")
                     st.rerun()
 
@@ -637,18 +529,14 @@ if option == "📂 ઇવેન્ટ મેનેજ":
             st.write(f"📊 આ ઇવેન્ટમાં કુલ **{len(faces_list)}** લેબલ કરેલા ફોટા છે.")
 
 # ============================================================
-# PAGE 2: QR CODE GENERATE (એડમિન પેજ - લૉક સાથે)
+# PAGE 2: QR CODE GENERATE (માત્ર એડમિન માટે)
 # ============================================================
 elif option == "📱 QR કોડ બનાવો":
-    if not check_admin_password():
-        st.stop()  # પાસવર્ડ વગર આ પેજ પણ નહી ખુલે
+    if not st.session_state.admin_authenticated:
+        st.error("❌ આ પેજ ખોલવા માટે એડમિન લૉગિન જરૂરી છે.")
+        st.stop()
 
-    st.markdown("""
-    <div class="card">
-        <div class="card-title">📱 QR કોડ બનાવો</div>
-        <div class="card-desc">અહીં તમે કોઈ પણ ઇવેન્ટ માટે QR કોડ બનાવી શકો છો. ગ્રાહકો આ QR કોડ સ્કેન કરીને તેમના ફોટા શોધી શકશે.</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 📱 QR કોડ બનાવો")
     
     events = list_all_local_events()
     if not events:
@@ -675,14 +563,13 @@ elif option == "📱 QR કોડ બનાવો":
                 )
             with col2:
                 st.info("💡 કેવી રીતે વાપરવું?")
-                st.write("1. આ QR કોડને પ્રિન્ટ કરીને ઇવેન્ટમાં મૂકો.")
-                st.write("2. ગ્રાહકો ફોન વડે સ્કેન કરશે.")
-                st.write("3. તેઓ સેલ્ફી લઈને તેમના તમામ ફોટા જોશે.")
+                st.write("1. આ QR કોડ પ્રિન્ટ કરીને મૂકો.")
+                st.write("2. ગ્રાહકો સ્કેન કરશે એટલે સીધા તેમના જ ફોટા મળશે.")
 
 # ============================================================
 # PAGE 3: CLIENT SEARCH (ગ્રાહક માટેનું મુખ્ય પેજ)
 # ============================================================
-elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા ફોટા શોધો":
+elif option == "🔍 ફોટો શોધો":
     query_params = st.query_params
     event_name_from_url = query_params.get("event")
 
@@ -707,15 +594,10 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
         if f"auth_{event_name}" not in st.session_state:
             st.session_state[f"auth_{event_name}"] = False
         
+        # ગ્રાહક માટે ઇવેન્ટ પાસવર્ડ
         if not st.session_state[f"auth_{event_name}"]:
-            st.markdown(f"""
-            <div class="card">
-                <div class="card-title">🔒 '{event_name}' ઇવેન્ટ માટે પાસવર્ડ</div>
-                <div class="card-desc">તમારા ફોટા જોવા માટે પાસવર્ડ નાખો.</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            entered_password = st.text_input("🔑 ઇવેન્ટ પાસવર્ડ:", type="password")
+            st.markdown(f"### 🔒 '{event_name}' ઇવેન્ટ પાસવર્ડ")
+            entered_password = st.text_input("🔑 પાસવર્ડ નાખો:", type="password")
             
             if st.button("🚪 પ્રવેશ કરો"):
                 event_data = load_event_data_local(event_name)
@@ -727,17 +609,11 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
                     st.error("❌ ખોટો પાસવર્ડ!")
             st.stop()
 
-        st.markdown(f"""
-        <div class="card">
-            <div class="card-title">🔍 '{event_name}' માં તમારા ફોટા શોધો</div>
-            <div class="card-desc">નીચે તમારો ફોટો અપલોડ કરો અથવા સેલ્ફી લો.</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"### 🔍 '{event_name}' માં તમારા ફોટા શોધો")
 
-        st.subheader("📸 ફોટો આપવાની રીત પસંદ કરો:")
         upload_option = st.radio(
-            "વિકલ્પ પસંદ કરો:",
-            ["📸 કેમેરાથી સેલ્ફી લો", "📁 ફોટો અપલોડ કરો"],
+            "ફોટો આપવાની રીત પસંદ કરો:",
+            ["📸 કેમેરાથી સેલ્ફી લો", "📁 ગેલેરીમાંથી ફોટો પસંદ કરો"],
             index=0,
             key=f"upload_option_{event_name}"
         )
@@ -847,7 +723,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
                             st.warning("⚠️ આ ઇવેન્ટમાંથી તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
 
         # ============================================================
-        # 🛒 CART DISPLAY & FAST PAYMENT (સાઇડબાર)
+        # 🛒 CART DISPLAY & PAYMENT (સાઇડબાર)
         # ============================================================
         st.sidebar.markdown("---")
         st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
@@ -865,17 +741,15 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
             
             st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
 
-            # કાર્ટ ખાલી કરવાનું બટન
             if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
                 st.session_state.cart = []
                 st.session_state.payment_done = False
                 st.session_state.show_checkout = False
                 st.rerun()
 
-            # જો ફોટા ફ્રી (₹0) હોય અથવા પેમેન્ટ કન્ફર્મ થયું હોય
             is_ready_to_download = (total_price == 0) or st.session_state.get("payment_done", False)
 
-            # ૧. જો પૈસા ચૂકવવાના હોય (total_price > 0) અને પેમેન્ટ બાકી હોય
+            # ૧. પેમેન્ટ સેક્શન
             if total_price > 0 and not st.session_state.get("payment_done", False):
                 if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
                     st.session_state.show_checkout = True
@@ -891,32 +765,32 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
                     st.sidebar.image(pay_qr_arr, caption="📱 કોઈપણ UPI એપથી સ્કેન કરો", width=180)
                     st.sidebar.caption(f"UPI ID: `{MY_UPI_ID}`")
 
-                    # 🔥 ગ્રાહક ફક્ત આ એક જ બટન દબાવશે (કોઈ UTR નંબર નાખવાની જરૂર નથી)
-                    if st.sidebar.button("✅ પેમેન્ટ થઈ ગયું! (ફોટા ડાઉનલોડ કરો)", key="payment_done_btn", use_container_width=True):
+                    # પેમેન્ટ કન્ફર્મેશન
+                    if st.sidebar.button("✅ પેમેન્ટ થઈ ગયું! (ફોટા મેળવો)", key="payment_done_btn", use_container_width=True):
                         unique_persons = set(item['person'] for item in cart)
                         persons_text = ", ".join(unique_persons)
                         
-                        # ૧. તરત જ તમને Telegram પર મેસેજ મોકલી દેશે
-                        send_telegram_message(
-                            f"🔔 <b>નવું પેમેન્ટ & ફોટો ડાઉનલોડ!</b>\n"
+                        # Telegram Notification
+                        msg_sent = send_telegram_message(
+                            f"🔔 <b>નવો ઓર્ડર & ડાઉનલોડ!</b>\n"
                             f"📸 ઇવેન્ટ: {event_name}\n"
                             f"👤 ગ્રાહક: {persons_text}\n"
-                            f"🖼️ કુલ ફોટા: {len(cart)}\n"
+                            f"🖼️ ફોટા સંખ્યા: {len(cart)}\n"
                             f"💵 રકમ: ₹{total_price}\n"
                             f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
                         )
-                        
-                        # ૨. ગ્રાહક માટે ડાઉનલોડ બટનો તરત ખોલી દેશે
+                        if msg_sent:
+                            st.sidebar.success("✅ ટેલિગ્રામ પર સૂચના મોકલાઈ ગઈ!")
+                            
                         st.session_state.payment_done = True
                         st.session_state.show_checkout = False
                         st.rerun()
 
-            # ૨. ડાઉનલોડ અને શેરિંગ બટનો
+            # ૨. ડાઉનલોડ અને શેરિંગ
             if is_ready_to_download:
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
                 
-                # ZIP ડાઉનલોડ (Google Drive માંથી સાચી ZIP બનશે)
                 import zipfile, io
                 zip_buffer = io.BytesIO()
                 has_files = False
@@ -956,7 +830,6 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
                         key="zip_download_final"
                     )
                 
-                # એક-એક ફોટો ડાઉનલોડ
                 for idx, item in enumerate(cart):
                     file_id = item.get("drive_file_id")
                     filename = item.get("filename", f"photo_{idx+1}.jpg")
@@ -964,7 +837,6 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
                         d_link = f"https://drive.google.com/uc?export=download&id={file_id}"
                         st.sidebar.markdown(f"📸 [{filename} ડાઉનલોડ કરો]({d_link})")
 
-                # શેરિંગ બટન્સ
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
                 app_url = "https://jayphotofinder.streamlit.app"
@@ -986,24 +858,12 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 મારા 
             st.sidebar.info("🛒 કાર્ટ ખાલી છે")
             st.session_state.payment_done = False
             st.session_state.show_checkout = False
-# ============================================================
-# PAGE 4: BENCHMARK (એડમિન પેજ)
-# ============================================================
-else:
-    if not check_admin_password():
-        st.stop()
-    st.header("📊 બેન્ચમાર્ક પરિણામો")
-    try:
-        df = pd.read_csv("benchmark_results.csv")
-        st.dataframe(df)
-    except FileNotFoundError:
-        st.warning("benchmark_results.csv મળી નહીં.")
 
 # ============================================================
 # FOOTER
 # ============================================================
 st.markdown("""
-<div class="footer">
+<div class="footer" style="text-align: center; margin-top: 50px; color: #6c757d; font-size: 0.8rem;">
     📸 <strong>જય ફોટો શોધ</strong> - AI દ્વારા તમારા ફોટા શોધો<br>
     © 2026 Jay Photography | Made with ❤️ in Gujarat
 </div>
