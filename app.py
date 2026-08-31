@@ -872,7 +872,8 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                             st.session_state.payment_done = True
                             st.session_state.show_checkout = False
                             st.rerun()
-                        
+                        else:
+                            st.sidebar.error("❌ કૃપા કરીને પેમેન્ટ કર્યા પછી મળેલો સાચો 12 આંકડાનો UTR નંબર નાખો!")
 
             # ૨. ડાઉનલોડ અને શેરિંગ
             if is_ready_to_download:
