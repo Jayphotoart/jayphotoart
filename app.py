@@ -54,13 +54,19 @@ except KeyError as e:
     import streamlit as st
     import razorpay
 
-    # --- SECRETS માંથી RAZORPAY સેટઅપ કરો ---
-    try:
-        RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
-        RAZORPAY_KEY_SECRET = st.secrets["razorpay_key_secret"]
-        razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-    except Exception as e:
-        st.error(f"Razorpay Setup Error: {e}")
+# ==========================================
+# 🔐 RAZORPAY CLIENT INITIALIZATION
+# ==========================================
+try:
+    RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
+    RAZORPAY_KEY_SECRET = st.secrets["razorpay_key_secret"]
+    
+    # અહીં razorpay_client વ્યાખ્યાયિત થાય છે
+    razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+except Exception as e:
+    st.error(f"Razorpay Setup માં ભૂલ છે: {e}")
+    st.info("કૃપા કરીને .streamlit/secrets.toml માં razorpay_key_id અને razorpay_key_secret ચેક કરો.")
+    st.stop()
     
 
 
@@ -859,7 +865,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                                     key="sidebar_download_btn"
                                 )
                             
-                            # Telegram પર UTR નંબર સાથે મેસેજ મોકલો
+                            # Telegram પર મેસેજ મોકલો
                             msg_sent = send_telegram_message(
                                 f"💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n"
                                 f"📸 ઇવેન્ટ: {event_name}\n"        
@@ -873,8 +879,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                             st.session_state.payment_done = True
                             st.session_state.show_checkout = False
                             st.rerun()
-                        else:
-                            st.sidebar.error("❌ કૃપા કરીને પેમેન્ટ કર્યા પછી મળેલો સાચો 12 આંકડાનો UTR નંબર નાખો!")
+                        
 
             # ૨. ડાઉનલોડ અને શેરિંગ
             if is_ready_to_download:
