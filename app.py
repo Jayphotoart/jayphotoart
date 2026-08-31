@@ -51,8 +51,8 @@ except KeyError as e:
     st.info("કૃપા કરીને .streamlit/secrets.toml ફાઈલ યોગ્ય રીતે સેટ કરો.")
     st.stop()
 #===========================================================
-    import streamlit as st
-    import razorpay
+import streamlit as st
+import razorpay
 
 # ==========================================
 # 🔐 RAZORPAY CLIENT INITIALIZATION
