@@ -792,7 +792,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
             is_ready_to_download = (total_price == 0) or st.session_state.get("payment_done", False)
 
-            # ૧. પેમેન્ટ સેક્શન 
+            # ૧. પેમેન્ટ સેક્શન (સુરક્ષિત UTR વેરિફિકેશન સાથે)
             if total_price > 0 and not st.session_state.get("payment_done", False):
                 if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
                     st.session_state.show_checkout = True
@@ -858,7 +858,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                                 mime="application/zip"
                             )
                             
-                            # Telegram પર મેસેજ મોકલો
+                            # Telegram પર UTR નંબર સાથે મેસેજ મોકલો
                             msg_sent = send_telegram_message(
                                 f"💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n"
                                 f"📸 ઇવેન્ટ: {event_name}\n"        
