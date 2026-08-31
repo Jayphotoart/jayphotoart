@@ -792,7 +792,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
             is_ready_to_download = (total_price == 0) or st.session_state.get("payment_done", False)
 
-            
+            # ૧. પેમેન્ટ સેક્શન 
             if total_price > 0 and not st.session_state.get("payment_done", False):
                 if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
                     st.session_state.show_checkout = True
