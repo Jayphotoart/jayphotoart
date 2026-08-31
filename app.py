@@ -921,7 +921,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
-                app_url = "https://jayphotofinder.streamlit.app"
+                app_url = "https://jayphotoart.streamlit.app"
                 share_text = "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! જય ફોટો શોધ દ્વારા શોધ્યા."
                 whatsapp_url = f"https://api.whatsapp.com/send?text={share_text} {app_url}"
                 st.sidebar.markdown(f"[![WhatsApp](https://img.icons8.com/color/48/000000/whatsapp.png)]({whatsapp_url}) શેર કરો")
