@@ -853,7 +853,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                                 mime="application/zip"
                             )
                             
-                            # Telegram પર UTR નંબર સાથે મેસેજ મોકલો
+                            # Telegram પર મેસેજ મોકલો
                             msg_sent = send_telegram_message(
                                 f"💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n"
                                 f"📸 ઇવેન્ટ: {event_name}\n"        
