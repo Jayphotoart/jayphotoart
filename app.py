@@ -765,98 +765,99 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                         else:
                             st.warning("⚠️ આ ઇવેન્ટમાંથી તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
 
-        # ============================================================
-        # 🛒 CART DISPLAY & SECURE UPI PAYMENT (સાઇડબાર)
-        # ============================================================
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
-        
-        if st.session_state.cart:
-            cart = st.session_state.cart
-            total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
-            
-            for idx, item in enumerate(cart):
-                price = item.get("price", PHOTO_PRICE)
-                if price == 0:
-                    st.sidebar.write(f"{idx+1}. {item['person']} - 🆓 FREE")
-                else:
-                    st.sidebar.write(f"{idx+1}. {item['person']} - ₹{price}")
-            
-            st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
-
-            if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
-                st.session_state.cart = []
-                st.session_state.payment_done = False
-                st.session_state.show_checkout = False
-                st.rerun()
-
-            is_ready_to_download = (total_price == 0) or st.session_state.get("payment_done", False)
-
-            # ૧. પેમેન્ટ સેક્શન (સુરક્ષિત UTR વેરિફિકેશન સાથે)
-            if total_price > 0 and not st.session_state.get("payment_done", False):
-                if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
-                    st.session_state.show_checkout = True
-
-                if st.session_state.get("show_checkout", False):
+                    # ============================================================
+                    # 🛒 CART DISPLAY & SECURE RAZORPAY PAYMENT (સાઇડબાર)
+                    # ============================================================
                     st.sidebar.markdown("---")
-                    st.sidebar.markdown(f"### 💳 પેમેન્ટ કરો: ₹{total_price}")
-                    
-                    # -------------------------------------------------------------
-                    # સ્ટેપ ૧: ગ્રાહકે ફોટા શોધીને પસંદ (Select) કરી લીધા
-                    # -------------------------------------------------------------
-                    selected_photos = [...] # ગ્રાહકે પસંદ કરેલા ફોટા
+                    st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
 
-                    if selected_photos:
-                        st.write(f"તમે {len(selected_photos)} ફોટા પસંદ કર્યા છે.")
-                        
-                        # Session State સેટ કરો
+                    if st.session_state.cart:
+                        cart = st.session_state.cart
+                        total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
+
+                        # કાર્ટની વસ્તુઓ ડિસ્પ્લે કરો
+                        for idx, item in enumerate(cart):
+                            price = item.get("price", PHOTO_PRICE)
+                            if price == 0:
+                                st.sidebar.write(f"{idx+1}. {item.get('person', 'Photo')} - 🆓 FREE")
+                            else:
+                                st.sidebar.write(f"{idx+1}. {item.get('person', 'Photo')} - ₹{price}")
+
+                        st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
+
+                        # કાર્ટ ખાલી કરવાનું બટન
+                        if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
+                            st.session_state.cart = []
+                            st.session_state.payment_done = False
+                            st.session_state.show_checkout = False
+                            st.session_state.payment_link_id = None
+                            st.session_state.payment_url = None
+                            st.rerun()
+
+                        # Session State મેનેજમેન્ટ
                         if "payment_done" not in st.session_state:
                             st.session_state.payment_done = False
                         if "payment_link_id" not in st.session_state:
                             st.session_state.payment_link_id = None
+                        if "payment_url" not in st.session_state:
+                            st.session_state.payment_url = None
 
-                        # -------------------------------------------------------------
-                        # સ્ટેપ ૨: 📍 RAZORPAY પેમેન્ટ સેક્શન (અહીં મૂકવો)
-                        # -------------------------------------------------------------
-                        if not st.session_state.payment_done:
-                            st.subheader("💳 પેમેન્ટ કરો")
+                        # ૧. પેમેન્ટ સેક્શન (જો રકમ > 0 હોય અને પેમેન્ટ બાકી હોય)
+                        if total_price > 0 and not st.session_state.payment_done:
+                            st.sidebar.markdown("---")
                             
-                            # પેમેન્ટ લિંક જનરેટ કરવાનું બટન
+                            # સ્ટેપ ૧: પેમેન્ટ લિંક બનાવવાનું બટન
                             if st.session_state.payment_link_id is None:
-                                if st.button("પેમેન્ટ લિંક મેળવો"):
-                                    link_data = {
-                                        "amount": 10000,  # ₹100 = 10000 પૈસા (તમારી કિંમત મુજબ બદલો)
-                                        "currency": "INR",
-                                        "description": "ફોટો ડાઉનલોડ ફી",
-                                    }
-                                    res = razorpay_client.payment_link.create(link_data)
-                                    st.session_state.payment_link_id = res["id"]
-                                    st.session_state.payment_url = res["short_url"]
-                                    st.rerun()
-
-                            # લિંક બતાવો અને વેરિફાય કરો
-                            if st.session_state.payment_link_id:
-                                st.markdown(f"### [👉 અહીં ક્લિક કરીને પેમેન્ટ પૂર્ણ કરો]({st.session_state.payment_url})")
-                                
-                                if st.button("🔄 મેં પેમેન્ટ કરી દીધું છે (Verify)"):
-                                    check_status = razorpay_client.payment_link.fetch(st.session_state.payment_link_id)
-                                    if check_status.get("status") == "paid":
-                                        st.session_state.payment_done = True
-                                        st.success("✅ પેમેન્ટ સફળ થયું!")
+                                if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
+                                    try:
+                                        # કુલ રકમ પૈસામાં કન્વર્ટ કરો (₹1 = 100 paise)
+                                        amount_in_paise = int(total_price * 100)
+                                        
+                                        link_data = {
+                                            "amount": amount_in_paise,
+                                            "currency": "INR",
+                                            "description": f"{len(cart)} Photos Download",
+                                        }
+                                        res = razorpay_client.payment_link.create(link_data)
+                                        st.session_state.payment_link_id = res["id"]
+                                        st.session_state.payment_url = res["short_url"]
                                         st.rerun()
-                                    else:
-                                        st.error("⚠️ પેમેન્ટ હજુ અધૂરું છે.")
+                                    except Exception as e:
+                                        st.sidebar.error(f"પેમેન્ટ લિંક બનાવવામાં ભૂલ: {e}")
 
-                        # -------------------------------------------------------------
-                        # સ્ટેપ ૩: ડાઉનલોડ સેક્શન (માત્ર પેમેન્ટ થાય પછી જ દેખાશે)
-                        # -------------------------------------------------------------
-                        if st.session_state.payment_done:
-                            st.success("🎉 હવે તમે ફોટા ડાઉનલોડ કરી શકો છો!")
-                            st.download_button(
-                                label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
-                                file_name="my_photos.zip",
-                                mime="application/zip"
-                            )
+                            # સ્ટેપ ૨: ગ્રાહકને પેમેન્ટ લિંક અને Verify બટન આપો
+                            if st.session_state.payment_link_id:
+                                st.sidebar.markdown(f"### [👉 અહીં ક્લિક કરી પેમેન્ટ કરો]({st.session_state.payment_url})")
+                                st.sidebar.caption("UPI / Card / NetBanking ઉપલબ્ધ છે.")
+
+                                if st.sidebar.button("🔄 મેં પેમેન્ટ કરી દીધું (Verify)", key="verify_pay_btn"):
+                                    try:
+                                        status_res = razorpay_client.payment_link.fetch(st.session_state.payment_link_id)
+                                        if status_res.get("status") == "paid":
+                                            st.session_state.payment_done = True
+                                            st.sidebar.success("✅ પેમેન્ટ સફળ થયું!")
+                                            st.rerun()
+                                        else:
+                                            st.sidebar.warning("⚠️ પેમેન્ટ હજુ મળ્યું નથી. કૃપા કરીને પેમેન્ટ પૂર્ણ કરો.")
+                                    except Exception as e:
+                                        st.sidebar.error(f"વેરિફિકેશન એરર: {e}")
+
+                        # ૨. ડાઉનલોડ સેક્શન (જ્યારે ફ્રી હોય અથવા પેમેન્ટ થઈ ગયું હોય)
+                        is_ready_to_download = (total_price == 0) or st.session_state.payment_done
+
+                        if is_ready_to_download:
+                            st.sidebar.markdown("---")
+                            st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
+                            
+                            # અહીં તમારા ફોટાનો ZIP ડેટા હોવો જોઈએ (દા.ત. zip_data)
+                            # જો zip_data મુખ્ય પેજ પર બનતું હોય તો ત્યાં પણ ડાઉનલોડ બટન રાખી શકાય
+                            if "zip_data" in locals() or "zip_data" in globals():
+                                st.sidebar.download_button(
+                                    label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
+                                    file_name="event_photos.zip",
+                                    mime="application/zip",
+                                    key="sidebar_download_btn"
+                                )
                             
                             # Telegram પર UTR નંબર સાથે મેસેજ મોકલો
                             msg_sent = send_telegram_message(
