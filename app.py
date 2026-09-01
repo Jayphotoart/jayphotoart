@@ -776,6 +776,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                     # ============================================================
                     st.sidebar.markdown("---")
                     st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
+                    is_ready_to_download = False
 
                     if st.session_state.cart:
                         cart = st.session_state.cart
@@ -897,6 +898,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                         
 
             # ૨. ડાઉનલોડ અને શેરિંગ
+            if is_ready_to_download:
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
                 
