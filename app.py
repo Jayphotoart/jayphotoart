@@ -897,78 +897,78 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                                 )
                         
 
-            # ૨. ડાઉનલોડ અને શેરિંગ
-            if is_ready_to_download:
-                st.sidebar.markdown("---")
-                st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
-                
-                import zipfile, io
-                zip_buffer = io.BytesIO()
-                has_files = False
-                
-                with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                    for item in cart:
-                        file_id = item.get("drive_file_id")
-                        filename = item.get("filename", "photo.jpg")
-                        file_bytes = None
-                        
-                        if file_id:
-                            try:
-                                d_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                                res = requests.get(d_url, timeout=10)
-                                if res.status_code == 200:
-                                    file_bytes = res.content
-                            except:
-                                pass
-                        
-                        if not file_bytes:
-                            local_p = os.path.join("events", event_name, "images", filename)
-                            if os.path.exists(local_p):
-                                with open(local_p, "rb") as f:
-                                    file_bytes = f.read()
+                                # ૨. ડાઉનલોડ અને શેરિંગ
+                                if is_ready_to_download:
+                                    st.sidebar.markdown("---")
+                                    st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
                                     
-                        if file_bytes:
-                            zip_file.writestr(filename, file_bytes)
-                            has_files = True
-                
-                zip_buffer.seek(0)
-                if has_files:
-                    st.sidebar.download_button(
-                        label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
-                        data=zip_buffer,
-                        file_name=f"{event_name}_photos.zip",
-                        mime="application/zip",
-                        key="zip_download_final"
-                    )
-                
-                for idx, item in enumerate(cart):
-                    file_id = item.get("drive_file_id")
-                    filename = item.get("filename", f"photo_{idx+1}.jpg")
-                    if file_id:
-                        d_link = f"https://drive.google.com/uc?export=download&id={file_id}"
-                        st.sidebar.markdown(f"📸 [{filename} ડાઉનલોડ કરો]({d_link})")
+                                    import zipfile, io
+                                    zip_buffer = io.BytesIO()
+                                    has_files = False
+                                    
+                                    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                                        for item in cart:
+                                            file_id = item.get("drive_file_id")
+                                            filename = item.get("filename", "photo.jpg")
+                                            file_bytes = None
+                                            
+                                            if file_id:
+                                                try:
+                                                    d_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                                                    res = requests.get(d_url, timeout=10)
+                                                    if res.status_code == 200:
+                                                        file_bytes = res.content
+                                                except:
+                                                    pass
+                                            
+                                            if not file_bytes:
+                                                local_p = os.path.join("events", event_name, "images", filename)
+                                                if os.path.exists(local_p):
+                                                    with open(local_p, "rb") as f:
+                                                        file_bytes = f.read()
+                                                        
+                                            if file_bytes:
+                                                zip_file.writestr(filename, file_bytes)
+                                                has_files = True
+                                    
+                                    zip_buffer.seek(0)
+                                    if has_files:
+                                        st.sidebar.download_button(
+                                            label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
+                                            data=zip_buffer,
+                                            file_name=f"{event_name}_photos.zip",
+                                            mime="application/zip",
+                                            key="zip_download_final"
+                                        )
+                                    
+                                    for idx, item in enumerate(cart):
+                                        file_id = item.get("drive_file_id")
+                                        filename = item.get("filename", f"photo_{idx+1}.jpg")
+                                        if file_id:
+                                            d_link = f"https://drive.google.com/uc?export=download&id={file_id}"
+                                            st.sidebar.markdown(f"📸 [{filename} ડાઉનલોડ કરો]({d_link})")
 
-                st.sidebar.markdown("---")
-                st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
-                app_url = "https://jayphotofinder.streamlit.app"
-                share_text = "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! જય ફોટો શોધ દ્વારા શોધ્યા."
-                whatsapp_url = f"https://api.whatsapp.com/send?text={share_text} {app_url}"
-                st.sidebar.markdown(f"[![WhatsApp](https://img.icons8.com/color/48/000000/whatsapp.png)]({whatsapp_url}) શેર કરો")
-                
-                if st.sidebar.button("📋 લિંક કોપી કરો", key="copy_link_btn"):
-                    st.sidebar.code(app_url)
-                    st.sidebar.success("✅ લિંક કોપી થઈ ગઈ!")
+                                    st.sidebar.markdown("---")
+                                    st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
+                                    app_url = "https://jayphotofinder.streamlit.app"
+                                    share_text = "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! જય ફોટો શોધ દ્વારા શોધ્યા."
+                                    whatsapp_url = f"https://api.whatsapp.com/send?text={share_text} {app_url}"
+                                    st.sidebar.markdown(f"[![WhatsApp](https://img.icons8.com/color/48/000000/whatsapp.png)]({whatsapp_url}) શેર કરો")
+                                    
+                                    if st.sidebar.button("📋 લિંક કોપી કરો", key="copy_link_btn"):
+                                        st.sidebar.code(app_url)
+                                        st.sidebar.success("✅ લિંક કોપી થઈ ગઈ!")
 
-                if st.sidebar.button("✅ કામ પૂરું થયું! (કાર્ટ ખાલી કરો)", key="clear_after_download_btn"):
-                    st.session_state.cart = []
-                    st.session_state.payment_done = False
-                    st.session_state.show_checkout = False
-                    st.rerun()
+                                    if st.sidebar.button("✅ કામ પૂરું થયું! (કાર્ટ ખાલી કરો)", key="clear_after_download_btn"):
+                                        st.session_state.cart = []
+                                        st.session_state.payment_done = False
+                                        st.session_state.show_checkout = False
+                                        st.rerun()
 
-        else:
-            st.sidebar.info("🛒 કાર્ટ ખાલી છે")
-            st.session_state.payment_done = False
-            st.session_state.show_checkout = False
+                            else:
+                                st.sidebar.info("🛒 કાર્ટ ખાલી છે")
+                                st.session_state.payment_done = False
+                                st.session_state.show_checkout = False
 
 # ============================================================
 # FOOTER
