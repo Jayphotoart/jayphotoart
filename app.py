@@ -780,6 +780,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
                     if st.session_state.cart:
                         cart = st.session_state.cart
+                        cart = st.session_state.get("cart", [])
                         total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
 
                         # કાર્ટની વસ્તુઓ ડિસ્પ્લે કરો
