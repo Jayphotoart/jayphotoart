@@ -897,7 +897,6 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                         
 
             # ૨. ડાઉનલોડ અને શેરિંગ
-            if is_ready_to_download:
                 st.sidebar.markdown("---")
                 st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
                 
