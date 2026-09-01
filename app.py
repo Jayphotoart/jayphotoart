@@ -833,10 +833,16 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
                             # સ્ટેપ ૨: ગ્રાહકને પેમેન્ટ લિંક અને Verify બટન આપો
                             if st.session_state.payment_link_id:
-                                st.sidebar.markdown(f"### [👉 અહીં ક્લિક કરી પેમેન્ટ કરો]({st.session_state.payment_url})")
-                                st.sidebar.caption("UPI / Card / NetBanking ઉપલબ્ધ છે.")
+                               st.sidebar.link_button(
+                                   label="💳 પેમેન્ટ કરો (Pay Now)",
+                                   url=st.session_state.payment_url,
+                                   type="primary",
+                                   use_container_width=True
+                                )
+                            st.sidebar.caption("ઉપરના બટન પર ક્લિક કરીને પેમેન્ટ પૂર્ણ કરો.")
+                            st.sidebar.caption("UPI / Card / NetBanking ઉપલબ્ધ છે.")
 
-                                if st.sidebar.button("🔄 મેં પેમેન્ટ કરી દીધું (Verify)", key="verify_pay_btn"):
+                            if st.sidebar.button("🔄 મેં પેમેન્ટ કરી દીધું (Verify)", key="verify_pay_btn"):
                                     try:
                                         status_res = razorpay_client.payment_link.fetch(st.session_state.payment_link_id)
                                         if status_res.get("status") == "paid":
@@ -876,9 +882,18 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                             if msg_sent:
                                 st.sidebar.success("✅ પેમેન્ટ વિગત મોકલાઈ ગઈ!")
                             
-                            st.session_state.payment_done = True
-                            st.session_state.show_checkout = False
-                            st.rerun()
+                            # લાઇન 885 ની જગ્યાએ આ રીતે લખો:
+                            if st.session_state.get("payment_done", False):
+                                st.sidebar.markdown("---")
+                                st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
+                                
+                                # તમારું ડાઉનલોડ બટન
+                                st.sidebar.download_button(
+                                    label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
+                                    file_name="event_photos.zip",
+                                    mime="application/zip",
+                                    key="download_final_photos"
+                                )
                         
 
             # ૨. ડાઉનલોડ અને શેરિંગ
