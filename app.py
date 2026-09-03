@@ -326,10 +326,7 @@ with col2:
 # 8️⃣ SMART NAVIGATION (ગ્રાહક અને એડમિન માટે અલગ રસ્તા)
 # ============================================================
 query_params = st.query_params
-event_name_from_url = query_params.get("event", "default_event_id")  # ← ડિફોલ્ટ ઉમેર્યું
-
-# 🔥 DEBUG: URL માં શું છે તે જોવા માટે (ટેસ્ટિંગ પછી દૂર કરશો)
-st.write(f"DEBUG: event_name_from_url = {event_name_from_url}")
+event_name_from_url = query_params.get("event")
 
 # જો QR સ્કેન દ્વારા ગ્રાહક આવે તો ફક્ત કસ્ટમર વ્યૂ બતાવો
 if event_name_from_url:
@@ -606,7 +603,7 @@ elif option == "📱 QR કોડ બનાવો":
         selected_event = st.selectbox("📂 ઇવેન્ટ પસંદ કરો", events)
         if selected_event:
             clean_event = selected_event.strip()
-            url = f"https://www.jayphotoart.in/?event={urllib.parse.quote(clean_event)}"
+            url = f"https://jayphotoart.in/?event={urllib.parse.quote(clean_event)}"
             qr_img = qrcode.make(url)
             qr_img_array = np.array(qr_img.convert('RGB'))
             col1, col2 = st.columns([1, 1])
@@ -954,7 +951,7 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
                                     st.sidebar.markdown("---")
                                     st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
-                                    app_url = "https://jayphotofinder.streamlit.app"
+                                    app_url = "https://jayphotoart.in"
                                     share_text = "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! જય ફોટો શોધ દ્વારા શોધ્યા."
                                     whatsapp_url = f"https://api.whatsapp.com/send?text={share_text} {app_url}"
                                     st.sidebar.markdown(f"[![WhatsApp](https://img.icons8.com/color/48/000000/whatsapp.png)]({whatsapp_url}) શેર કરો")
