@@ -603,7 +603,7 @@ elif option == "📱 QR કોડ બનાવો":
         selected_event = st.selectbox("📂 ઇવેન્ટ પસંદ કરો", events)
         if selected_event:
             clean_event = selected_event.strip()
-            url = f"https://jayphotoart.streamlit.app/?event={urllib.parse.quote(clean_event)}"
+           url = f"https://www.jayphotoart.in/?event={urllib.parse.quote(clean_event)}"
             qr_img = qrcode.make(url)
             qr_img_array = np.array(qr_img.convert('RGB'))
             col1, col2 = st.columns([1, 1])
