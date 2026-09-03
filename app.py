@@ -326,7 +326,10 @@ with col2:
 # 8️⃣ SMART NAVIGATION (ગ્રાહક અને એડમિન માટે અલગ રસ્તા)
 # ============================================================
 query_params = st.query_params
-event_name_from_url = query_params.get("event")
+event_name_from_url = query_params.get("event", "default_event_id")  # ← ડિફોલ્ટ ઉમેર્યું
+
+# 🔥 DEBUG: URL માં શું છે તે જોવા માટે (ટેસ્ટિંગ પછી દૂર કરશો)
+st.write(f"DEBUG: event_name_from_url = {event_name_from_url}")
 
 # જો QR સ્કેન દ્વારા ગ્રાહક આવે તો ફક્ત કસ્ટમર વ્યૂ બતાવો
 if event_name_from_url:
