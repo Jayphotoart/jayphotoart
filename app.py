@@ -588,7 +588,7 @@ elif option == "📂 ઇવેન્ટ મેનેજ":
                     st.rerun()
 
 # ============================================================
-# PAGE 2: QR CODE GENERATE (માત્ર એડમિન માટે)
+# PAGE 2: QR કોડ બનાવો (માત્ર એડમિન માટે)
 # ============================================================
 elif option == "📱 QR કોડ બનાવો":
     if not st.session_state.admin_logged_in:
@@ -596,34 +596,53 @@ elif option == "📱 QR કોડ બનાવો":
         st.stop()
 
     st.markdown("### 📱 QR કોડ બનાવો")
+
+    # 1) ઇવેન્ટ્સ લાવો
     events = list_all_local_events()
     if not events:
         st.warning("⚠️ હજુ સુધી કોઈ ઇવેન્ટ નથી. કૃપા કરીને '📂 ઇવેન્ટ મેનેજ' માં પહેલાં ઇવેન્ટ બનાવો.")
     else:
+        # 2) ઇવેન્ટ પસંદ કરો
         selected_event = st.selectbox("📂 ઇવેન્ટ પસંદ કરો", events)
+
         if selected_event:
+            # 3) ઇવેન્ટ નામ સાફ કરો (extra spaces દૂર, URL-safe બનાવો)
             clean_event = selected_event.strip()
-            # 1. ગ્રાહક પેજ માટે URL બનાવો (પાસવર્ડ વાળુ)
-            url = f"https://jayphotoart.in/?event={urllib.parse.quote(clean_event)}&page=guest"
+
+            # 4) URL બનાવો (જો તમારી સાઇટ jayphotoart.in હોય)
+            import urllib.parse
+            url = f"https://jayphotoart.in/?event={urllib.parse.quote(clean_event)}"
+
+            # 5) QR કોડ બનાવો
+            import qrcode
+            import numpy as np
+            from io import BytesIO
+
             qr_img = qrcode.make(url)
-            qr_img_array = np.array(qr_img.convert('RGB'))
+            qr_img_array = np.array(qr_img.convert("RGB"))
+
+            # 6) બે કૉલમ: ડાબે QR, જમણે સૂચના
             col1, col2 = st.columns([1, 1])
+
             with col1:
                 st.image(qr_img_array, caption=f"📱 '{selected_event}' માટે QR કોડ", width=250)
                 st.success(f"🔗 URL: {url}")
-                from io import BytesIO
+
+                # ડાઉનલોડ બટન
                 buffered = BytesIO()
                 qr_img.save(buffered, format="PNG")
                 st.download_button(
                     label="⬇ QR કોડ ડાઉનલોડ કરો",
                     data=buffered.getvalue(),
                     file_name=f"qr_{clean_event}.png",
-                    mime="image/png"
+                    mime="image/png",
                 )
+
             with col2:
                 st.info("💡 કેવી રીતે વાપરવું?")
                 st.write("1. આ QR કોડ પ્રિન્ટ કરીને ઇવેન્ટમાં મૂકો.")
                 st.write("2. ગ્રાહકો સ્કેન કરશે એટલે સીધા ગ્રાહક પેજ પર જશે.")
+                st.write(f"3. લિંક: {url}")
 
 # ============================================================
 # PAGE 3: CLIENT SEARCH (ગ્રાહક માટેનું મુખ્ય પેજ)
