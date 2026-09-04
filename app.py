@@ -327,6 +327,8 @@ with col2:
 # ============================================================
 query_params = st.query_params
 event_name_from_url = query_params.get("event")
+st.write("EVENT FROM URL:", event_name_from_url)
+
 
 # જો QR સ્કેન દ્વારા ગ્રાહક આવે તો ફક્ત કસ્ટમર વ્યૂ બતાવો
 if event_name_from_url:
