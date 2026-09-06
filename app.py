@@ -930,20 +930,163 @@ else:
 
 
     # --------------------------------------------------------
-    # 7. FREE ફોટા માટે TEST Download Button
+    # 7. Free અથવા Paid પછી બધા ફોટાનો ZIP Download
     # --------------------------------------------------------
-    if total_price == 0:
-        st.sidebar.markdown("---")
-        st.sidebar.success("🎉 Free ફોટા Download માટે તૈયાર છે!")
+    is_ready_to_download = (
+        total_price == 0 or st.session_state.payment_done
+    )
 
-        st.sidebar.download_button(
-            label=f"📥 TEST: બધા {len(cart)} ફોટા Download કરો",
-            data=b"Jay Photo Art Download Test",
-            file_name="test.txt",
-            mime="text/plain",
-            key="test_download_button",
-            width="stretch"
-        )
+    if is_ready_to_download:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
+        st.sidebar.success("🎉 તમારા ફોટા Download માટે તૈયાર છે!")
+
+        # ZIP file RAMમાં તૈયાર કરો
+        zip_buffer = io.BytesIO()
+
+        # કેટલા ફોટા ZIPમાં ઉમેરાયા તે ગણવા
+        added_files = []
+        failed_files = []
+
+        with zipfile.ZipFile(
+            zip_buffer,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED
+        ) as zip_file:
+
+            # Cartના દરેક selected photo માટે
+            for idx, item in enumerate(cart):
+                filename = item.get(
+                    "filename",
+                    f"photo_{idx + 1}.jpg"
+                )
+
+                file_id = item.get("drive_file_id")
+                file_bytes = None
+
+                # --------------------------------------------
+                # A. પહેલું: Google Driveમાંથી photo મેળવો
+                # --------------------------------------------
+                if file_id:
+                    try:
+                        drive_download_url = (
+                            "https://drive.google.com/uc?"
+                            f"export=download&id={file_id}"
+                        )
+
+                        response = requests.get(
+                            drive_download_url,
+                            timeout=30
+                        )
+
+                        content_type = response.headers.get(
+                            "Content-Type",
+                            ""
+                        )
+
+                        # Photo response હોવી જોઈએ; HTML page નહીં
+                        if (
+                            response.status_code == 200
+                            and len(response.content) > 1000
+                            and "text/html" not in content_type.lower()
+                        ):
+                            file_bytes = response.content
+
+                    except Exception as e:
+                        print(
+                            f"Google Drive download error: "
+                            f"{filename} | {e}"
+                        )
+
+                # --------------------------------------------
+                # B. Driveથી ન મળે તો local events folder જુઓ
+                # --------------------------------------------
+                if not file_bytes:
+                    local_path = os.path.join(
+                        "events",
+                        event_name,
+                        "images",
+                        filename
+                    )
+
+                    if os.path.exists(local_path):
+                        try:
+                            with open(local_path, "rb") as photo_file:
+                                file_bytes = photo_file.read()
+
+                        except Exception as e:
+                            print(
+                                f"Local photo read error: "
+                                f"{filename} | {e}"
+                            )
+
+                # --------------------------------------------
+                # C. મળેલો photo ZIPમાં ઉમેરો
+                # --------------------------------------------
+                if file_bytes:
+                    zip_file.writestr(filename, file_bytes)
+                    added_files.append(filename)
+                else:
+                    failed_files.append(filename)
+
+        zip_buffer.seek(0)
+
+        # --------------------------------------------
+        # D. ZIP Download Button
+        # --------------------------------------------
+        if added_files:
+            st.sidebar.success(
+                f"✅ {len(added_files)} ફોટા ZIPમાં તૈયાર છે."
+            )
+
+            st.sidebar.download_button(
+                label=(
+                    f"📥 બધા {len(added_files)} ફોટા "
+                    "એક સાથે Download કરો (ZIP)"
+                ),
+                data=zip_buffer.getvalue(),
+                file_name=f"{event_name}_photos.zip",
+                mime="application/zip",
+                key="zip_download_final",
+                width="stretch",
+
+                # Download click થાય ત્યારે Telegram notification
+                on_click=send_download_notification,
+                args=(event_name, cart, total_price)
+            )
+
+        else:
+            st.sidebar.error(
+                "❌ ZIPમાં એક પણ ફોટો ઉમેરાયો નથી."
+            )
+
+            st.sidebar.warning(
+                "Google Drive file access અથવા local events folder "
+                "ચેક કરવો પડશે."
+            )
+
+        # હમણાં Debug રાખો, જો ZIP ન બને તો કારણ દેખાશે
+        with st.sidebar.expander("🔧 ZIP Debug માહિતી"):
+            st.write(f"કાર્ટમાં કુલ ફોટા: {len(cart)}")
+            st.write(f"ZIPમાં ઉમેરાયેલા ફોટા: {len(added_files)}")
+            st.write(f"ZIPમાં ન ઉમેરાયેલા ફોટા: {len(failed_files)}")
+
+            for idx, item in enumerate(cart):
+                filename = item.get("filename", "")
+                file_id = item.get("drive_file_id")
+
+                local_path = os.path.join(
+                    "events",
+                    event_name,
+                    "images",
+                    filename
+                )
+
+                st.write(f"ફોટો {idx + 1}: {filename}")
+                st.write(f"Drive File ID છે?: {bool(file_id)}")
+                st.write(
+                    f"Local Photo છે?: {os.path.exists(local_path)}"
+                )
 
     # --------------------------------------------------------
     # 3. Razorpay Payment Link બનાવો
