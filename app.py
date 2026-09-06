@@ -982,118 +982,98 @@ else:
                     st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
 
 
-                # --------------------------------------------------------
-                # 5. Free અથવા Paid પછી ZIP Download
-                # --------------------------------------------------------
-                is_ready_to_download = (
-                    total_price == 0 or st.session_state.payment_done
-                )
+            # --------------------------------------------------------
+            # 5. Free અથવા Paid પછી ZIP Download
+            # --------------------------------------------------------
+            is_ready_to_download = (
+                total_price == 0 or st.session_state.payment_done
+            )
 
-                if is_ready_to_download:
-                    st.sidebar.markdown("---")
-                    st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
-                    st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
+            if is_ready_to_download:
+                st.sidebar.markdown("---")
+                st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
+                st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
 
-                    # ZIP file RAM memoryમાં બનાવો
-                    zip_buffer = io.BytesIO()
-                    has_files = False
+                # ZIP memoryમાં બનાવો
+                zip_buffer = io.BytesIO()
+                has_files = False
 
-                    with zipfile.ZipFile(
-                        zip_buffer,
-                        "w",
-                        zipfile.ZIP_DEFLATED
-                    ) as zip_file:
+                with zipfile.ZipFile(
+                    zip_buffer,
+                    mode="w",
+                    compression=zipfile.ZIP_DEFLATED
+                ) as zip_file:
 
-                        # Cartમાં જેટલા ફોટા select થયા છે તે બધા ZIPમાં ઉમેરાશે
-                        for idx, item in enumerate(cart):
-                            file_id = item.get("drive_file_id")
-                            filename = item.get(
-                                "filename",
-                                f"photo_{idx + 1}.jpg"
-                            )
+                    for idx, item in enumerate(cart):
+                        file_id = item.get("drive_file_id")
+                        filename = item.get("filename", f"photo_{idx + 1}.jpg")
+                        file_bytes = None
 
-                            file_bytes = None
-
-                            # પહેલું Google Driveમાંથી ફોટો લેવા પ્રયત્ન
-                            if file_id:
-                                try:
-                                    download_url = (
-                                        "https://drive.google.com/uc?"
-                                        f"export=download&id={file_id}"
-                                    )
-
-                                    response = requests.get(
-                                        download_url,
-                                        timeout=30
-                                    )
-
-                                    if response.status_code == 200:
-                                        file_bytes = response.content
-
-                                except Exception as e:
-                                    print(
-                                        "Google Drive photo download error:",
-                                        e
-                                    )
-
-                            # Driveથી ન મળે તો local events folderમાં શોધો
-                            if not file_bytes:
-                                local_path = os.path.join(
-                                    "events",
-                                    event_name,
-                                    "images",
-                                    filename
+                        # પહેલું: Google Driveથી ફોટો લો
+                        if file_id:
+                            try:
+                                drive_download_url = (
+                                    f"https://drive.google.com/uc?"
+                                    f"export=download&id={file_id}"
                                 )
 
-                                if os.path.exists(local_path):
-                                    try:
-                                        with open(
-                                            local_path,
-                                            "rb"
-                                        ) as photo_file:
-                                            file_bytes = photo_file.read()
+                                response = requests.get(
+                                    drive_download_url,
+                                    timeout=30
+                                )
 
-                                    except Exception as e:
-                                        print(
-                                            "Local photo read error:",
-                                            e
-                                        )
+                                if response.status_code == 200:
+                                    file_bytes = response.content
 
-                            # જો photo મળ્યો હોય તો ZIPમાં ઉમેરો
-                            if file_bytes:
-                                zip_file.writestr(filename, file_bytes)
-                                has_files = True
+                            except Exception as e:
+                                print(f"Google Drive download error: {e}")
 
-                    # ZIP બનાવ્યા પછી cursor શરૂઆતમાં લાવો
-                    zip_buffer.seek(0)
+                        # બીજું: Local events folderમાં હોય તો લો
+                        if not file_bytes:
+                            local_path = os.path.join(
+                                "events",
+                                event_name,
+                                "images",
+                                filename
+                            )
 
-                    # હવે જ સાચો Download Button દેખાશે
-                    if has_files:
-                        st.sidebar.download_button(
-                            label=(
-                                f"📥 બધા {len(cart)} ફોટા એક સાથે "
-                                "ડાઉનલોડ કરો (ZIP)"
-                            ),
-                            data=zip_buffer.getvalue(),
-                            file_name=f"{event_name}_all_photos.zip",
-                            mime="application/zip",
-                            key="zip_download_final",
-                            use_container_width=True,
+                            if os.path.exists(local_path):
+                                try:
+                                    with open(local_path, "rb") as photo_file:
+                                        file_bytes = photo_file.read()
+                                except Exception as e:
+                                    print(f"Local photo read error: {e}")
 
-                            # ગ્રાહક Download દબાવે ત્યારે Telegramમાં message
-                            on_click=send_download_notification,
-                            args=(event_name, cart, total_price)
-                        )
+                        # મળેલો photo ZIPમાં ઉમેરો
+                        if file_bytes:
+                            zip_file.writestr(filename, file_bytes)
+                            has_files = True
 
-                        st.sidebar.caption(
-                            f"✅ ZIPમાં તમારા {len(cart)} પસંદ કરેલા ફોટા છે."
-                        )
+                zip_buffer.seek(0)
 
-                    else:
-                        st.sidebar.error(
-                            "❌ Download માટે ફોટા મળ્યા નથી. "
-                            "Google Drive file access અથવા local folder ચેક કરો."
-                        )
+                               # મહત્વપૂર્ણ: data= આપવું જ પડે
+                if has_files:
+                    st.sidebar.download_button(
+                        label=f"📥 બધા {len(cart)} ફોટા Download કરો (ZIP)",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"{event_name}_photos.zip",
+                        mime="application/zip",
+                        width="stretch",
+
+                        # ગ્રાહક Download button દબાવે ત્યારે Telegram message જશે
+                        on_click=send_download_notification,
+                        args=(event_name, cart, total_price)
+                    )
+
+                    st.sidebar.caption(
+                        f"✅ એક ZIP fileમાં તમારા {len(cart)} પસંદ કરેલા ફોટા download થશે."
+                    )
+
+                else:
+                    st.sidebar.error(
+                        "❌ ZIP માટે ફોટા મળ્યા નથી. "
+                        "Google Drive File ID અથવા local ફોટા folder ચેક કરો."
+                    )
 
 
                 # ----------------------------------------------------
@@ -1149,21 +1129,21 @@ else:
             st.link_button(
                 "🟢\nWhatsApp",
                 whatsapp_url,
-                use_container_width=True
+                width="stretch"
             )
 
         with share_col2:
             st.link_button(
                 "🔵\nFacebook",
                 facebook_url,
-                use_container_width=True
+                width="stretch"
             )
 
         with share_col3:
             if st.button(
                 "🟣\nInstagram",
                 key="instagram_share_btn",
-                use_container_width=True
+                width="stretch"
             ):
                 st.sidebar.info(
                     "Instagramમાં શેર કરવા માટે નીચેની ઇવેન્ટ લિંક Copy કરો "
