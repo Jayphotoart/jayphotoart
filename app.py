@@ -88,7 +88,7 @@ if "show_checkout" not in st.session_state:
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"
-PHOTO_PRICE = 10
+PHOTO_PRICE = 0
 
 # ============================================================
 # 3️⃣ TELEGRAM NOTIFICATION FUNCTION
@@ -1093,27 +1093,63 @@ else:
 
 
         # ----------------------------------------------------
-        # 7. WhatsApp Share
+        # ફોટા Share Section
         # ----------------------------------------------------
         st.sidebar.markdown("---")
         st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
 
         app_url = f"https://jayphotoart.in/?event={urllib.parse.quote(event_name)}"
+
         share_text = (
-            "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! "
-            "Jay Photo Art દ્વારા શોધેલા ફોટા."
+            f"🌟 {event_name} ઇવેન્ટના સુંદર ફોટા જુઓ!\n\n"
+            f"📸 Jay Photo Art દ્વારા ફોટા શોધો:\n{app_url}"
         )
 
+        # WhatsApp
         whatsapp_url = (
             "https://api.whatsapp.com/send?text="
-            f"{urllib.parse.quote(share_text + ' ' + app_url)}"
+            f"{urllib.parse.quote(share_text)}"
         )
 
-        st.sidebar.markdown(f"[📱 WhatsApp પર શેર કરો]({whatsapp_url})")
+        # Facebook શેર
+        facebook_url = (
+            "https://www.facebook.com/sharer/sharer.php?u="
+            f"{urllib.parse.quote(app_url, safe='')}"
+        )
 
+        # ત્રણ columnsમાં buttons
+        share_col1, share_col2, share_col3 = st.sidebar.columns(3)
+
+        with share_col1:
+            st.link_button(
+                "🟢 WhatsApp",
+                whatsapp_url,
+                use_container_width=True
+            )
+
+        with share_col2:
+            st.link_button(
+                "🔵 Facebook",
+                facebook_url,
+                use_container_width=True
+            )
+
+        with share_col3:
+            if st.button(
+                "🟣 Instagram",
+                key="instagram_share_btn",
+                use_container_width=True
+            ):
+                st.info(
+                    "📋 નીચેની ઇવેન્ટ લિંક કોપી કરો અને "
+                    "Instagram Story, Bio અથવા પોસ્ટમાં Paste કરો."
+                )
+                st.code(app_url)
+
+
+        # ઇવેન્ટ લિંક બધાને copy કરવા માટે
         if st.sidebar.button("📋 ઇવેન્ટ લિંક બતાવો", key="show_event_link_btn"):
             st.sidebar.code(app_url)
-
 
         # ----------------------------------------------------
         # 8. કામ પૂર્ણ થયા પછી કાર્ટ ખાલી કરો
