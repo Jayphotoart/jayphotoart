@@ -96,21 +96,38 @@ PHOTO_PRICE = 10
 import requests
 
 def send_telegram_message(message):
-    bot_token = st.secrets["telegram"]["bot_token"]
-    chat_id = st.secrets["telegram"]["chat_id"]
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    
     try:
-        response = requests.post(url, json={
+        bot_token = st.secrets["telegram"]["bot_token"]
+        chat_id = st.secrets["telegram"]["chat_id"]
+
+        telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+        payload = {
             "chat_id": chat_id,
             "text": message,
             "parse_mode": "HTML"
-        }, timeout=10)
-        response.raise_for_status()
-        st.success("✅ Telegram મેસેજ મોકલાઈ ગયો!")
+        }
+
+        response = requests.post(
+            telegram_url,
+            data=payload,
+            timeout=20
+        )
+
+        response_data = response.json()
+
+        # Streamlit Logsમાં Telegramનું સાચું error દેખાશે
+        print("Telegram response:", response.status_code, response_data)
+
+        if response.status_code == 200 and response_data.get("ok") is True:
+            return True
+        else:
+            print("Telegram error:", response_data)
+            return False
+
     except Exception as e:
-        st.error(f"❌ Telegram મેસેજ મોકલવામાં ત્રુટિ: {str(e)}")
-        st.error(f"Error details: {e}")
+        print("Telegram exception:", str(e))
+        return False
 
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
