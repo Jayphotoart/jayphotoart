@@ -947,6 +947,7 @@ else:
         # કેટલા ફોટા ZIPમાં ઉમેરાયા તે ગણવા
         added_files = []
         failed_files = []
+        downloaded_photos = []
 
         with zipfile.ZipFile(
             zip_buffer,
@@ -1024,40 +1025,52 @@ else:
                 # C. મળેલો photo ZIPમાં ઉમેરો
                 # --------------------------------------------
                 if file_bytes:
-                    zip_file.writestr(filename, file_bytes)
                     added_files.append(filename)
+
+                    # Direct JPG download માટે photo bytes સાચવો
+                    downloaded_photos.append(
+                        (filename, file_bytes)
+                    )
                 else:
                     failed_files.append(filename)
 
         zip_buffer.seek(0)
 
         # --------------------------------------------
-        # D. ZIP Download Button
+        # D. સીધા Photo Download Buttons
         # --------------------------------------------
         if added_files:
             st.sidebar.success(
-                f"✅ {len(added_files)} ફોટા ZIPમાં તૈયાર છે."
+                f"✅ {len(added_files)} ફોટા Download માટે તૈયાર છે."
             )
 
-            st.sidebar.download_button(
-                label=(
-                    f"📥 બધા {len(added_files)} ફોટા "
-                    "એક સાથે Download કરો (ZIP)"
-                ),
-                data=zip_buffer.getvalue(),
-                file_name=f"{event_name}_photos.zip",
-                mime="application/zip",
-                key="zip_download_final",
-                width="stretch",
+            st.sidebar.markdown(
+                "### 📥 ફોટા સીધા Download કરો"
+            )
 
-                # Download click થાય ત્યારે Telegram notification
+            # દરેક photo માટે અલગ JPG download button
+            for photo_name, photo_bytes in downloaded_photos:
+                st.sidebar.download_button(
+                    label=f"📸 {photo_name} Download કરો",
+                    data=photo_bytes,
+                    file_name=photo_name,
+                    mime="image/jpeg",
+                    key=f"direct_download_{photo_name}",
+                    width="stretch",
+                    on_click=send_download_notification,
+                    args=(event_name, cart, total_price)
+                )
+                # ગ્રાહક આ photo Download button દબાવે એટલે Telegram message જશે
                 on_click=send_download_notification,
                 args=(event_name, cart, total_price)
-            )
 
+            st.sidebar.caption(
+                "💡 દરેક ફોટા માટે નીચેનો Download button દબાવો. "
+                "ફોટો સીધો તમારા મોબાઇલમાં JPG તરીકે save થશે."
+            )
         else:
             st.sidebar.error(
-                "❌ ZIPમાં એક પણ ફોટો ઉમેરાયો નથી."
+                "❌ Download માટે એક પણ ફોટો મળ્યો નથી."
             )
 
             st.sidebar.warning(
