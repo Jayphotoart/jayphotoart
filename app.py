@@ -8,6 +8,8 @@ import json
 import qrcode
 import os
 import shutil
+import io
+import zipfile
 import hashlib
 import datetime
 import tempfile
@@ -799,205 +801,316 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                         else:
                             st.warning("⚠️ આ ઇવેન્ટમાંથી તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
 
-                    # ============================================================
-                    # 🛒 CART DISPLAY & SECURE RAZORPAY PAYMENT (સાઇડબાર)
-                    # ============================================================
-                    st.sidebar.markdown("---")
-                    st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
-                    is_ready_to_download = False
+# ============================================================
+# 🛒 CART DISPLAY & SECURE RAZORPAY PAYMENT (સાઇડબાર)
+# ============================================================
+st.sidebar.markdown("---")
+st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
 
-                    if st.session_state.cart:
-                        cart = st.session_state.cart
-                        cart = st.session_state.get("cart", [])
-                        total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
+# Session State શરૂ કરો
+if "cart" not in st.session_state:
+    st.session_state.cart = []
 
-                        # કાર્ટની વસ્તુઓ ડિસ્પ્લે કરો
-                        for idx, item in enumerate(cart):
-                            price = item.get("price", PHOTO_PRICE)
-                            if price == 0:
-                                st.sidebar.write(f"{idx+1}. {item.get('person', 'Photo')} - 🆓 FREE")
-                            else:
-                                st.sidebar.write(f"{idx+1}. {item.get('person', 'Photo')} - ₹{price}")
+if "payment_done" not in st.session_state:
+    st.session_state.payment_done = False
 
-                        st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
+if "payment_link_id" not in st.session_state:
+    st.session_state.payment_link_id = None
 
-                        # કાર્ટ ખાલી કરવાનું બટન
-                        if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
-                            st.session_state.cart = []
-                            st.session_state.payment_done = False
-                            st.session_state.show_checkout = False
-                            st.session_state.payment_link_id = None
-                            st.session_state.payment_url = None
-                            st.rerun()
+if "payment_url" not in st.session_state:
+    st.session_state.payment_url = None
 
-                        # Session State મેનેજમેન્ટ
-                        if "payment_done" not in st.session_state:
-                            st.session_state.payment_done = False
-                        if "payment_link_id" not in st.session_state:
-                            st.session_state.payment_link_id = None
-                        if "payment_url" not in st.session_state:
-                            st.session_state.payment_url = None
+if "telegram_sent" not in st.session_state:
+    st.session_state.telegram_sent = False
 
-                        # ૧. પેમેન્ટ સેક્શન (જો રકમ > 0 હોય અને પેમેન્ટ બાકી હોય)
-                        if total_price > 0 and not st.session_state.payment_done:
-                            st.sidebar.markdown("---")
-                            
-                            # સ્ટેપ ૧: પેમેન્ટ લિંક બનાવવાનું બટન
-                            if st.session_state.payment_link_id is None:
-                                if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
-                                    try:
-                                        # કુલ રકમ પૈસામાં કન્વર્ટ કરો (₹1 = 100 paise)
-                                        amount_in_paise = int(total_price * 100)
-                                        
-                                        link_data = {
-                                            "amount": amount_in_paise,
-                                            "currency": "INR",
-                                            "description": f"{len(cart)} Photos Download",
-                                        }
-                                        res = razorpay_client.payment_link.create(link_data)
-                                        st.session_state.payment_link_id = res["id"]
-                                        st.session_state.payment_url = res["short_url"]
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.sidebar.error(f"પેમેન્ટ લિંક બનાવવામાં ભૂલ: {e}")
 
-                            # સ્ટેપ ૨: ગ્રાહકને પેમેન્ટ લિંક અને Verify બટન આપો
-                            if st.session_state.payment_link_id:
-                               st.sidebar.link_button(
-                                   label="💳 પેમેન્ટ કરો (Pay Now)",
-                                   url=st.session_state.payment_url,
-                                   type="primary",
-                                   use_container_width=True
-                                )
-                            st.sidebar.caption("ઉપરના બટન પર ક્લિક કરીને પેમેન્ટ પૂર્ણ કરો.")
-                            st.sidebar.caption("UPI / Card / NetBanking ઉપલબ્ધ છે.")
+# કાર્ટ ખાલી હોય તો
+if not st.session_state.cart:
+    st.sidebar.info("🛒 કાર્ટ ખાલી છે")
 
-                            if st.sidebar.button("🔄 મેં પેમેન્ટ કરી દીધું (Verify)", key="verify_pay_btn"):
-                                    try:
-                                        status_res = razorpay_client.payment_link.fetch(st.session_state.payment_link_id)
-                                        if status_res.get("status") == "paid":
-                                            st.session_state.payment_done = True
-                                            st.sidebar.success("✅ પેમેન્ટ સફળ થયું!")
-                                            st.rerun()
-                                        else:
-                                            st.sidebar.warning("⚠️ પેમેન્ટ હજુ મળ્યું નથી. કૃપા કરીને પેમેન્ટ પૂર્ણ કરો.")
-                                    except Exception as e:
-                                        st.sidebar.error(f"વેરિફિકેશન એરર: {e}")
 
-                        # ૨. ડાઉનલોડ સેક્શન (જ્યારે ફ્રી હોય અથવા પેમેન્ટ થઈ ગયું હોય)
-                        is_ready_to_download = (total_price == 0) or st.session_state.payment_done
+# કાર્ટમાં ફોટા હોય તો
+else:
+    cart = st.session_state.cart
+    total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
 
-                        if is_ready_to_download:
-                            st.sidebar.markdown("---")
-                            st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
-                            
-                            # અહીં તમારા ફોટાનો ZIP ડેટા હોવો જોઈએ (દા.ત. zip_data)
-                            # જો zip_data મુખ્ય પેજ પર બનતું હોય તો ત્યાં પણ ડાઉનલોડ બટન રાખી શકાય
-                            if "zip_data" in locals() or "zip_data" in globals():
-                                st.sidebar.download_button(
-                                    label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
-                                    file_name="event_photos.zip",
-                                    mime="application/zip",
-                                    key="sidebar_download_btn"
-                                )
-                            
-                            # Telegram પર મેસેજ મોકલો
-                            msg_sent = send_telegram_message(
-                                f"💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n"
-                                f"📸 ઇવેન્ટ: {event_name}\n"        
-                                f"🖼️ ફોટા સંખ્યા: {len(cart)}\n"
-                                f"💵 રકમ: ₹{total_price}\n"
-                                f"🕒 {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
+    # --------------------------------------------------------
+    # 1. કાર્ટના ફોટા બતાવો
+    # --------------------------------------------------------
+    for idx, item in enumerate(cart):
+        price = item.get("price", PHOTO_PRICE)
+        person_name = item.get("person", "Photo")
+        filename = item.get("filename", "")
+
+        if price == 0:
+            st.sidebar.write(
+                f"{idx + 1}. {person_name} - 🆓 FREE"
+            )
+        else:
+            st.sidebar.write(
+                f"{idx + 1}. {person_name} - ₹{price}"
+            )
+
+        if filename:
+            st.sidebar.caption(f"📷 {filename}")
+
+    st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
+
+
+    # --------------------------------------------------------
+    # 2. કાર્ટ ખાલી કરો
+    # --------------------------------------------------------
+    if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
+        st.session_state.cart = []
+        st.session_state.payment_done = False
+        st.session_state.payment_link_id = None
+        st.session_state.payment_url = None
+        st.session_state.telegram_sent = False
+        st.rerun()
+
+
+    # --------------------------------------------------------
+    # 3. Razorpay Payment Link બનાવો
+    # --------------------------------------------------------
+    if total_price > 0 and not st.session_state.payment_done:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 💳 પેમેન્ટ કરો")
+
+        # Payment link બનાવો
+        if st.session_state.payment_link_id is None:
+            if st.sidebar.button(
+                f"🧾 ચેકઆઉટ કરો (₹{total_price})",
+                key="checkout_btn"
+            ):
+                try:
+                    amount_in_paise = int(total_price * 100)
+
+                    link_data = {
+                        "amount": amount_in_paise,
+                        "currency": "INR",
+                        "description": f"{len(cart)} Photos Download",
+                    }
+
+                    res = razorpay_client.payment_link.create(link_data)
+
+                    st.session_state.payment_link_id = res["id"]
+                    st.session_state.payment_url = res["short_url"]
+                    st.session_state.telegram_sent = False
+
+                    st.rerun()
+
+                except Exception as e:
+                    st.sidebar.error(f"❌ પેમેન્ટ લિંક બનાવવામાં ભૂલ: {e}")
+
+
+        # Payment link બતાવો
+        if st.session_state.payment_link_id:
+            st.sidebar.link_button(
+                label="💳 પેમેન્ટ કરો (Pay Now)",
+                url=st.session_state.payment_url,
+                type="primary",
+                use_container_width=True
+            )
+
+            st.sidebar.caption("પહેલાં Pay Now દબાવીને Razorpay/UPIમાં પેમેન્ટ કરો.")
+            st.sidebar.caption("પેમેન્ટ પછી નીચે Verify બટન દબાવો.")
+
+            # ------------------------------------------------
+            # 4. Razorpay Payment Verify
+            # ------------------------------------------------
+            if st.sidebar.button(
+                "🔄 મેં પેમેન્ટ કરી દીધું (Verify)",
+                key="verify_pay_btn"
+            ):
+                try:
+                    status_res = razorpay_client.payment_link.fetch(
+                        st.session_state.payment_link_id
+                    )
+
+                    payment_status = status_res.get("status", "")
+
+                    if payment_status == "paid":
+                        st.session_state.payment_done = True
+
+                        # Telegram એક જ વખત મોકલવો
+                        if not st.session_state.telegram_sent:
+                            telegram_message = (
+                                "💰 <b>નવું પેમેન્ટ મળ્યું!</b>\n\n"
+                                f"📸 <b>ઇવેન્ટ:</b> {event_name}\n"
+                                f"🖼️ <b>ફોટા સંખ્યા:</b> {len(cart)}\n"
+                                f"💵 <b>રકમ:</b> ₹{total_price}\n"
+                                f"🧾 <b>Payment Link ID:</b> "
+                                f"{st.session_state.payment_link_id}\n"
+                                f"🕒 <b>સમય:</b> "
+                                f"{datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
                             )
+
+                            msg_sent = send_telegram_message(telegram_message)
+
                             if msg_sent:
-                                st.sidebar.success("✅ પેમેન્ટ વિગત મોકલાઈ ગઈ!")
-                            
-                            # લાઇન 885 ની જગ્યાએ આ રીતે લખો:
-                            if st.session_state.get("payment_done", False):
-                                st.sidebar.markdown("---")
-                                st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
-                                
-                                # તમારું ડાઉનલોડ બટન
-                                st.sidebar.download_button(
-                                    label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
-                                    file_name="event_photos.zip",
-                                    mime="application/zip",
-                                    key="download_final_photos"
-                                )
-                        
-
-                                # ૨. ડાઉનલોડ અને શેરિંગ
-                                if is_ready_to_download:
-                                    st.sidebar.markdown("---")
-                                    st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
-                                    
-                                    import zipfile, io
-                                    zip_buffer = io.BytesIO()
-                                    has_files = False
-                                    
-                                    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                                        for item in cart:
-                                            file_id = item.get("drive_file_id")
-                                            filename = item.get("filename", "photo.jpg")
-                                            file_bytes = None
-                                            
-                                            if file_id:
-                                                try:
-                                                    d_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                                                    res = requests.get(d_url, timeout=10)
-                                                    if res.status_code == 200:
-                                                        file_bytes = res.content
-                                                except:
-                                                    pass
-                                            
-                                            if not file_bytes:
-                                                local_p = os.path.join("events", event_name, "images", filename)
-                                                if os.path.exists(local_p):
-                                                    with open(local_p, "rb") as f:
-                                                        file_bytes = f.read()
-                                                        
-                                            if file_bytes:
-                                                zip_file.writestr(filename, file_bytes)
-                                                has_files = True
-                                    
-                                    zip_buffer.seek(0)
-                                    if has_files:
-                                        st.sidebar.download_button(
-                                            label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
-                                            data=zip_buffer,
-                                            file_name=f"{event_name}_photos.zip",
-                                            mime="application/zip",
-                                            key="zip_download_final"
-                                        )
-                                    
-                                    for idx, item in enumerate(cart):
-                                        file_id = item.get("drive_file_id")
-                                        filename = item.get("filename", f"photo_{idx+1}.jpg")
-                                        if file_id:
-                                            d_link = f"https://drive.google.com/uc?export=download&id={file_id}"
-                                            st.sidebar.markdown(f"📸 [{filename} ડાઉનલોડ કરો]({d_link})")
-
-                                    st.sidebar.markdown("---")
-                                    st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
-                                    app_url = "https://jayphotoart.in"
-                                    share_text = "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! જય ફોટો શોધ દ્વારા શોધ્યા."
-                                    whatsapp_url = f"https://api.whatsapp.com/send?text={share_text} {app_url}"
-                                    st.sidebar.markdown(f"[![WhatsApp](https://img.icons8.com/color/48/000000/whatsapp.png)]({whatsapp_url}) શેર કરો")
-                                    
-                                    if st.sidebar.button("📋 લિંક કોપી કરો", key="copy_link_btn"):
-                                        st.sidebar.code(app_url)
-                                        st.sidebar.success("✅ લિંક કોપી થઈ ગઈ!")
-
-                                    if st.sidebar.button("✅ કામ પૂરું થયું! (કાર્ટ ખાલી કરો)", key="clear_after_download_btn"):
-                                        st.session_state.cart = []
-                                        st.session_state.payment_done = False
-                                        st.session_state.show_checkout = False
-                                        st.rerun()
-
+                                st.session_state.telegram_sent = True
+                                st.sidebar.success("✅ Telegram પર પેમેન્ટ મેસેજ મોકલાઈ ગયો!")
                             else:
-                                st.sidebar.info("🛒 કાર્ટ ખાલી છે")
-                                st.session_state.payment_done = False
-                                st.session_state.show_checkout = False
+                                st.sidebar.warning(
+                                    "⚠️ પેમેન્ટ સફળ છે, પણ Telegram મેસેજ મોકલાયો નથી."
+                                )
+
+                        st.sidebar.success("✅ પેમેન્ટ સફળ થયું!")
+                        st.rerun()
+
+                    else:
+                        st.sidebar.warning(
+                            "⚠️ પેમેન્ટ હજુ મળ્યું નથી. "
+                            "Razorpayમાં પેમેન્ટ પૂર્ણ કરીને ફરી Verify દબાવો."
+                        )
+
+                except Exception as e:
+                    st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
+
+
+    # --------------------------------------------------------
+    # 5. Free અથવા Paid પછી ZIP Download
+    # --------------------------------------------------------
+    is_ready_to_download = (
+        total_price == 0 or st.session_state.payment_done
+    )
+
+    if is_ready_to_download:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
+        st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
+
+        # ZIP memoryમાં બનાવો
+        zip_buffer = io.BytesIO()
+        has_files = False
+
+        with zipfile.ZipFile(
+            zip_buffer,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED
+        ) as zip_file:
+
+            for idx, item in enumerate(cart):
+                file_id = item.get("drive_file_id")
+                filename = item.get("filename", f"photo_{idx + 1}.jpg")
+                file_bytes = None
+
+                # પહેલું: Google Driveથી ફોટો લો
+                if file_id:
+                    try:
+                        drive_download_url = (
+                            f"https://drive.google.com/uc?"
+                            f"export=download&id={file_id}"
+                        )
+
+                        response = requests.get(
+                            drive_download_url,
+                            timeout=30
+                        )
+
+                        if response.status_code == 200:
+                            file_bytes = response.content
+
+                    except Exception as e:
+                        print(f"Google Drive download error: {e}")
+
+                # બીજું: Local events folderમાં હોય તો લો
+                if not file_bytes:
+                    local_path = os.path.join(
+                        "events",
+                        event_name,
+                        "images",
+                        filename
+                    )
+
+                    if os.path.exists(local_path):
+                        try:
+                            with open(local_path, "rb") as photo_file:
+                                file_bytes = photo_file.read()
+                        except Exception as e:
+                            print(f"Local photo read error: {e}")
+
+                # મળેલો photo ZIPમાં ઉમેરો
+                if file_bytes:
+                    zip_file.writestr(filename, file_bytes)
+                    has_files = True
+
+        zip_buffer.seek(0)
+
+        # મહત્વપૂર્ણ: data= આપવું જ પડે
+        if has_files:
+            st.sidebar.download_button(
+                label="📥 બધા ફોટા ડાઉનલોડ કરો (ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name=f"{event_name}_photos.zip",
+                mime="application/zip",
+                key="zip_download_final",
+                use_container_width=True
+            )
+        else:
+            st.sidebar.error(
+                "❌ ZIP માટે ફોટા મળ્યા નથી. "
+                "Google Drive File ID અથવા local ફોટા folder ચેક કરો."
+            )
+
+
+        # ----------------------------------------------------
+        # 6. દરેક ફોટાની Direct Download Link
+        # ----------------------------------------------------
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 📸 એક-એક ફોટો ડાઉનલોડ કરો")
+
+        for idx, item in enumerate(cart):
+            file_id = item.get("drive_file_id")
+            filename = item.get("filename", f"photo_{idx + 1}.jpg")
+
+            if file_id:
+                direct_link = (
+                    f"https://drive.google.com/uc?"
+                    f"export=download&id={file_id}"
+                )
+
+                st.sidebar.markdown(
+                    f"📷 [{filename} ડાઉનલોડ કરો]({direct_link})"
+                )
+
+
+        # ----------------------------------------------------
+        # 7. WhatsApp Share
+        # ----------------------------------------------------
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
+
+        app_url = f"https://jayphotoart.in/?event={urllib.parse.quote(event_name)}"
+        share_text = (
+            "🌟 મારા ઇવેન્ટના સુંદર ફોટા જુઓ! "
+            "Jay Photo Art દ્વારા શોધેલા ફોટા."
+        )
+
+        whatsapp_url = (
+            "https://api.whatsapp.com/send?text="
+            f"{urllib.parse.quote(share_text + ' ' + app_url)}"
+        )
+
+        st.sidebar.markdown(f"[📱 WhatsApp પર શેર કરો]({whatsapp_url})")
+
+        if st.sidebar.button("📋 ઇવેન્ટ લિંક બતાવો", key="show_event_link_btn"):
+            st.sidebar.code(app_url)
+
+
+        # ----------------------------------------------------
+        # 8. કામ પૂર્ણ થયા પછી કાર્ટ ખાલી કરો
+        # ----------------------------------------------------
+        if st.sidebar.button(
+            "✅ કામ પૂરું થયું! (કાર્ટ ખાલી કરો)",
+            key="clear_after_download_btn"
+        ):
+            st.session_state.cart = []
+            st.session_state.payment_done = False
+            st.session_state.payment_link_id = None
+            st.session_state.payment_url = None
+            st.session_state.telegram_sent = False
+            st.rerun()
 
 # ============================================================
 # FOOTER
