@@ -91,18 +91,24 @@ PHOTO_PRICE = 10
 # ============================================================
 # 3️⃣ TELEGRAM NOTIFICATION FUNCTION
 # ============================================================
+import requests
+
 def send_telegram_message(message):
+    bot_token = st.secrets["telegram"]["bot_token"]
+    chat_id = st.secrets["telegram"]["chat_id"]
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    
     try:
-        token = st.secrets.get("telegram", {}).get("bot_token")
-        chat_id = st.secrets.get("telegram", {}).get("chat_id")
-        if not token or not chat_id:
-            return False
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
-        resp = requests.post(url, json=payload, timeout=8)
-        return resp.status_code == 200
-    except Exception:
-        return False
+        response = requests.post(url, json={
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }, timeout=10)
+        response.raise_for_status()
+        st.success("✅ Telegram મેસેજ મોકલાઈ ગયો!")
+    except Exception as e:
+        st.error(f"❌ Telegram મેસેજ મોકલવામાં ત્રુટિ: {str(e)}")
+        st.error(f"Error details: {e}")
 
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
