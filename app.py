@@ -842,10 +842,14 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 # ============================================================
 # 🛒 CART DISPLAY & SECURE RAZORPAY PAYMENT (સાઇડબાર)
 # ============================================================
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
 
-# Session State શરૂ કરો
+
+# ------------------------------------------------------------
+# 1. Session State શરૂ કરો
+# ------------------------------------------------------------
 if "cart" not in st.session_state:
     st.session_state.cart = []
 
@@ -862,64 +866,61 @@ if "telegram_sent" not in st.session_state:
     st.session_state.telegram_sent = False
 
 
-# કાર્ટ ખાલી હોય તો
-if not st.session_state.cart:
+# ------------------------------------------------------------
+# 2. Cart અને Total Price બનાવો
+# ------------------------------------------------------------
+cart = st.session_state.get("cart", [])
+
+total_price = sum(
+    item.get("price", PHOTO_PRICE)
+    for item in cart
+)
+
+
+# ------------------------------------------------------------
+# 3. Cart ખાલી હોય તો
+# ------------------------------------------------------------
+if not cart:
     st.sidebar.info("🛒 કાર્ટ ખાલી છે")
 
 
-# કાર્ટમાં ફોટા હોય તો
+# ------------------------------------------------------------
+# 4. Cartમાં Photos હોય તો
+# ------------------------------------------------------------
 else:
-    cart = st.session_state.cart
-    total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
-
-if st.session_state.cart:
-    cart = st.session_state.cart
-    total_price = sum(
-        item.get("price", PHOTO_PRICE)
-        for item in cart
-    )
-
-    # 1) ફક્ત આ lines loopમાં રહેશે
+    # દરેક પસંદ કરેલો ફોટો બતાવો
     for idx, item in enumerate(cart):
         price = item.get("price", PHOTO_PRICE)
+        person_name = item.get("person", "Photo")
+        filename = item.get("filename", "")
 
         if price == 0:
             st.sidebar.write(
-                f"{idx + 1}. {item.get('person', 'Photo')} - 🆓 FREE"
+                f"{idx + 1}. {person_name} - 🆓 FREE"
             )
         else:
             st.sidebar.write(
-                f"{idx + 1}. {item.get('person', 'Photo')} - ₹{price}"
+                f"{idx + 1}. {person_name} - ₹{price}"
             )
 
-        st.sidebar.caption(
-            f"📷 {item.get('filename', '')}"
-        )
+        if filename:
+            st.sidebar.caption(f"📷 {filename}")
 
-    # 2) અહીંથી નીચેનો ભાગ LOOPની બહાર હોવો જોઈએ
+
+    # --------------------------------------------------------
+    # 5. કુલ રકમ
+    # --------------------------------------------------------
     st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
 
-    # આ Test Button દેખાય તો placement બરાબર છે
-    if total_price == 0:
-        st.sidebar.success("🎉 Free ફોટા Download માટે તૈયાર છે!")
-
-        st.sidebar.download_button(
-            label=f"📥 TEST: બધા {len(cart)} ફોટા Download કરો",
-            data=b"Jay Photo Art Download Test",
-            file_name="test.txt",
-            mime="text/plain",
-            width="stretch",
-            key="test_download_button"
-        )
-
-else:
-    st.sidebar.info("🛒 કાર્ટ ખાલી છે")
-
 
     # --------------------------------------------------------
-    # 2. કાર્ટ ખાલી કરો
+    # 6. કાર્ટ ખાલી કરવાનું button
     # --------------------------------------------------------
-    if st.sidebar.button("🗑️ કાર્ટ ખાલી કરો", key="clear_cart_btn"):
+    if st.sidebar.button(
+        "🗑️ કાર્ટ ખાલી કરો",
+        key="clear_cart_btn",
+        width="stretch"
+    ):
         st.session_state.cart = []
         st.session_state.payment_done = False
         st.session_state.payment_link_id = None
@@ -927,6 +928,22 @@ else:
         st.session_state.telegram_sent = False
         st.rerun()
 
+
+    # --------------------------------------------------------
+    # 7. FREE ફોટા માટે TEST Download Button
+    # --------------------------------------------------------
+    if total_price == 0:
+        st.sidebar.markdown("---")
+        st.sidebar.success("🎉 Free ફોટા Download માટે તૈયાર છે!")
+
+        st.sidebar.download_button(
+            label=f"📥 TEST: બધા {len(cart)} ફોટા Download કરો",
+            data=b"Jay Photo Art Download Test",
+            file_name="test.txt",
+            mime="text/plain",
+            key="test_download_button",
+            width="stretch"
+        )
 
     # --------------------------------------------------------
     # 3. Razorpay Payment Link બનાવો
