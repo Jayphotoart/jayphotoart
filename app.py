@@ -872,27 +872,48 @@ else:
     cart = st.session_state.cart
     total_price = sum(item.get("price", PHOTO_PRICE) for item in cart)
 
-    # --------------------------------------------------------
-    # 1. કાર્ટના ફોટા બતાવો
-    # --------------------------------------------------------
+if st.session_state.cart:
+    cart = st.session_state.cart
+    total_price = sum(
+        item.get("price", PHOTO_PRICE)
+        for item in cart
+    )
+
+    # 1) ફક્ત આ lines loopમાં રહેશે
     for idx, item in enumerate(cart):
         price = item.get("price", PHOTO_PRICE)
-        person_name = item.get("person", "Photo")
-        filename = item.get("filename", "")
 
         if price == 0:
             st.sidebar.write(
-                f"{idx + 1}. {person_name} - 🆓 FREE"
+                f"{idx + 1}. {item.get('person', 'Photo')} - 🆓 FREE"
             )
         else:
             st.sidebar.write(
-                f"{idx + 1}. {person_name} - ₹{price}"
+                f"{idx + 1}. {item.get('person', 'Photo')} - ₹{price}"
             )
 
-        if filename:
-            st.sidebar.caption(f"📷 {filename}")
+        st.sidebar.caption(
+            f"📷 {item.get('filename', '')}"
+        )
 
+    # 2) અહીંથી નીચેનો ભાગ LOOPની બહાર હોવો જોઈએ
     st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
+
+    # આ Test Button દેખાય તો placement બરાબર છે
+    if total_price == 0:
+        st.sidebar.success("🎉 Free ફોટા Download માટે તૈયાર છે!")
+
+        st.sidebar.download_button(
+            label=f"📥 TEST: બધા {len(cart)} ફોટા Download કરો",
+            data=b"Jay Photo Art Download Test",
+            file_name="test.txt",
+            mime="text/plain",
+            width="stretch",
+            key="test_download_button"
+        )
+
+else:
+    st.sidebar.info("🛒 કાર્ટ ખાલી છે")
 
 
     # --------------------------------------------------------
