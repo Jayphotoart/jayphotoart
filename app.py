@@ -197,38 +197,70 @@ def send_download_notification(event_name, cart, total_price):
         return False
 
 # ============================================================
-# 📋 TELEGRAM TEST FUNCTION
+# 📋 TELEGRAM TEST FUNCTION (IMPROVED)
 # ============================================================
 def test_telegram_connection():
     """Telegram connection test કરો"""
     print("========== TELEGRAM TEST START ==========")
     
     try:
+        # 1. Check if telegram section exists
         if "telegram" not in st.secrets:
             st.error("❌ 'telegram' section not found in secrets.toml!")
+            print("❌ 'telegram' section not found in secrets.toml!")
             return False
             
-        bot_token = st.secrets["telegram"].get("bot_token")
-        chat_id = st.secrets["telegram"].get("chat_id")
+        # 2. Get credentials
+        bot_token = st.secrets["telegram"].get("bot_token", "").strip()
+        chat_id = st.secrets["telegram"].get("chat_id", "").strip()
         
-        if not bot_token or not chat_id:
-            st.error("❌ Bot token or Chat ID not configured!")
-            st.info("Please check your .streamlit/secrets.toml file")
+        # 3. Validate credentials
+        if not bot_token:
+            st.error("❌ Bot token is empty!")
+            print("❌ Bot token is empty!")
             return False
             
-        # Test message
-        test_msg = f"🧪 Test message at {datetime.datetime.now()}"
+        if not chat_id:
+            st.error("❌ Chat ID is empty!")
+            print("❌ Chat ID is empty!")
+            return False
+            
+        # 4. Print debug info (without exposing full token)
+        print(f"✅ Bot token found: {bot_token[:10]}... (length: {len(bot_token)})")
+        print(f"✅ Chat ID found: {chat_id} (length: {len(chat_id)})")
+        
+        # 5. Test message
+        test_msg = f"""🧪 <b>Telegram Test</b>
+        
+⏰ Time: {datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')}
+📱 App: Jay Photo Shodh
+✅ Status: Test message
+
+If you see this, Telegram is working! 🎉"""
+        
+        # 6. Send message
         result = send_telegram_message(test_msg)
         
         if result:
-            st.success("✅ Telegram connection successful!")
+            st.success("✅ Telegram connection successful! Check your Telegram app.")
+            print("✅ Telegram test successful!")
         else:
-            st.error("❌ Telegram connection failed! Check logs.")
+            st.error("❌ Telegram connection failed! Check the details below:")
+            st.info("""
+            **Possible issues:**
+            1. ❌ Bot token is invalid
+            2. ❌ Chat ID is incorrect
+            3. ❌ Bot is not a member of the chat
+            4. ❌ Bot is not started (@BotFather)
+            5. ❌ Internet connection issue
+            """)
+            print("❌ Telegram test failed!")
             
         return result
         
     except Exception as e:
         st.error(f"❌ Test failed: {str(e)}")
+        print(f"❌ Test exception: {str(e)}")
         return False
 
 # ============================================================
@@ -725,7 +757,8 @@ if st.session_state.admin_logged_in:
     st.sidebar.subheader("🔧 Admin Tools")
     
     with st.sidebar.expander("🔔 Telegram Test", expanded=False):
-        if st.button("📤 Send Test Message", use_container_width=True, key="sidebar_telegram_test"):
+        # ✅ FIXED: use_container_width replaced with width='stretch'
+        if st.button("📤 Send Test Message", width='stretch', key="sidebar_telegram_test"):
             with st.spinner("Sending..."):
                 result = test_telegram_connection()
                 if result:
@@ -739,7 +772,6 @@ if st.session_state.admin_logged_in:
             chat_id = st.secrets["telegram"].get("chat_id")
             st.sidebar.caption(f"Bot: {bot_token[:10] if bot_token else '❌'}...")
             st.sidebar.caption(f"Chat: {chat_id if chat_id else '❌'}")
-
 # ============================================================
 # PAGE 2: QR કોડ બનાવો (માત્ર એડમિન માટે)
 # ============================================================
