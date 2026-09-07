@@ -136,10 +136,12 @@ def send_telegram_message(message):
         return False
 
 def send_download_notification(event_name, cart, total_price):
-    print("========== DOWNLOAD CALLBACK START ==========")
-    print("Event:", event_name)
-    print("Photos in cart:", len(cart))
-    print("Total price:", total_price)
+    st.session_state.download_test_message = (
+        f"✅ Download click મળ્યો! "
+        f"ઇવેન્ટ: {event_name} | "
+        f"ફોટા: {len(cart)} | "
+        f"કુલ: ₹{total_price}"
+    )
 
     try:
         message = (
@@ -1028,6 +1030,11 @@ else:
             st.sidebar.success(
                 f"✅ {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે."
             )
+
+            if "download_test_message" in st.session_state:
+                st.sidebar.success(
+                    st.session_state.download_test_message
+                )
 
             for photo_number, (filename, photo_bytes) in enumerate(
                 downloaded_photos,
