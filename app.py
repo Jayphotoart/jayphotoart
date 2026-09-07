@@ -94,73 +94,142 @@ PHOTO_PRICE = 0
 # 3️⃣ TELEGRAM NOTIFICATION FUNCTION
 # ============================================================
 import requests
+import streamlit as st
+import datetime
 
 def send_telegram_message(message):
     print("========== TELEGRAM FUNCTION START ==========")
-
+    
     try:
-        bot_token = st.secrets["telegram"]["bot_token"]
-        chat_id = st.secrets["telegram"]["chat_id"]
-
-        print("Telegram chat ID મળ્યો:", bool(chat_id))
-        print("Telegram bot token મળ્યો:", bool(bot_token))
-
+        # st.secrets ચેક કરો
+        if "telegram" not in st.secrets:
+            print("❌ 'telegram' section not found in secrets!")
+            return False
+            
+        bot_token = st.secrets["telegram"].get("bot_token")
+        chat_id = st.secrets["telegram"].get("chat_id")
+        
+        if not bot_token or not chat_id:
+            print("❌ Bot token or Chat ID missing!")
+            print(f"Bot token: {bool(bot_token)}")
+            print(f"Chat ID: {bool(chat_id)}")
+            return False
+            
+        print(f"✅ Bot token found: {bot_token[:5]}...")
+        print(f"✅ Chat ID found: {chat_id}")
+        
+        # ટેસ્ટ મેસેજ મોકલો
+        test_message = f"🔔 Test message at {datetime.datetime.now()}"
+        
         telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
+        
         payload = {
             "chat_id": chat_id,
             "text": message,
             "parse_mode": "HTML"
         }
-
+        
         response = requests.post(
             telegram_url,
             data=payload,
             timeout=20
         )
-
-        print("Telegram status:", response.status_code)
-        print("Telegram response:", response.text)
+        
+        print(f"📡 Telegram status: {response.status_code}")
+        print(f"📡 Telegram response: {response.text}")
+        
+        if response.status_code == 200:
+            response_data = response.json()
+            if response_data.get("ok") is True:
+                print("✅ Message sent successfully!")
+                print("========== TELEGRAM FUNCTION END ==========")
+                return True
+            else:
+                print(f"❌ API returned error: {response_data}")
+        else:
+            print(f"❌ HTTP error: {response.status_code}")
+            
         print("========== TELEGRAM FUNCTION END ==========")
-
-        response_data = response.json()
-
-        if response.status_code == 200 and response_data.get("ok") is True:
-            return True
-
         return False
-
+        
     except Exception as e:
-        print("Telegram exception:", str(e))
+        print(f"❌ Telegram exception: {str(e)}")
         print("========== TELEGRAM FUNCTION END ==========")
         return False
 
 def send_download_notification(event_name, cart, total_price):
-    st.session_state.download_test_message = (
-        f"✅ Download click મળ્યો! "
-        f"ઇવેન્ટ: {event_name} | "
-        f"ફોટા: {len(cart)} | "
-        f"કુલ: ₹{total_price}"
-    )
-
+    """Download notification send કરો"""
+    print("========== DOWNLOAD CALLBACK START ==========")
+    
     try:
+        # Cart size check
+        cart_size = len(cart) if cart else 0
+        
+        # Message prepare કરો
         message = (
             "📥 <b>ગ્રાહકે ફોટા Download કર્યા!</b>\n\n"
             f"📸 <b>ઇવેન્ટ:</b> {event_name}\n"
-            f"🖼️ <b>પસંદ કરેલા ફોટા:</b> {len(cart)}\n"
+            f"🖼️ <b>પસંદ કરેલા ફોટા:</b> {cart_size}\n"
             f"💰 <b>કુલ રકમ:</b> ₹{total_price}\n"
-            f"🕒 <b>સમય:</b> "
-            f"{datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
+            f"🕒 <b>સમય:</b> {datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
         )
-
+        
+        # Message print કરો (debugging માટે)
+        print(f"📤 Sending message: {message}")
+        
+        # Telegram મોકલો
         success = send_telegram_message(message)
-
-        print("Telegram message success:", success)
+        
+        if success:
+            st.session_state.download_test_message = "✅ Download notification sent!"
+            print("✅ Download notification sent successfully!")
+        else:
+            st.session_state.download_test_message = "❌ Failed to send notification!"
+            print("❌ Download notification failed!")
+            
         print("========== DOWNLOAD CALLBACK END ==========")
-
+        return success
+        
     except Exception as e:
-        print("Download callback error:", str(e))
+        print(f"❌ Download callback error: {str(e)}")
+        st.session_state.download_test_message = f"❌ Error: {str(e)}"
         print("========== DOWNLOAD CALLBACK END ==========")
+        return False
+
+# ============================================================
+# 📋 TELEGRAM TEST FUNCTION
+# ============================================================
+def test_telegram_connection():
+    """Telegram connection test કરો"""
+    print("========== TELEGRAM TEST START ==========")
+    
+    try:
+        if "telegram" not in st.secrets:
+            st.error("❌ 'telegram' section not found in secrets.toml!")
+            return False
+            
+        bot_token = st.secrets["telegram"].get("bot_token")
+        chat_id = st.secrets["telegram"].get("chat_id")
+        
+        if not bot_token or not chat_id:
+            st.error("❌ Bot token or Chat ID not configured!")
+            st.info("Please check your .streamlit/secrets.toml file")
+            return False
+            
+        # Test message
+        test_msg = f"🧪 Test message at {datetime.datetime.now()}"
+        result = send_telegram_message(test_msg)
+        
+        if result:
+            st.success("✅ Telegram connection successful!")
+        else:
+            st.error("❌ Telegram connection failed! Check logs.")
+            
+        return result
+        
+    except Exception as e:
+        st.error(f"❌ Test failed: {str(e)}")
+        return False
 
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
@@ -1050,13 +1119,13 @@ else:
                 else:
                     photo_mime = "image/jpeg"
 
+                # Download બટનમાં on_click યોગ્ય રીતે ઉમેરો
                 st.sidebar.download_button(
                     label=f"📥 ફોટો {photo_number} Download કરો",
                     data=photo_bytes,
                     file_name=filename,
                     mime=photo_mime,
                     key=f"direct_photo_download_{photo_number}_{filename}",
-                    width="stretch",
                     on_click=send_download_notification,
                     args=(event_name, cart, total_price)
                 )
@@ -1436,3 +1505,9 @@ st.markdown("""
     © 2026 Jay Photography | Made with ❤️ in Gujarat
 </div>
 """, unsafe_allow_html=True)
+
+# Hidden test button (only visible in development)
+if st.secrets.get("environment") == "development":
+    with st.expander("🔧 Dev Tools (Hidden)", expanded=False):
+        if st.button("🔔 Test Telegram (Dev)"):
+            test_telegram_connection()
