@@ -114,16 +114,16 @@ def send_telegram_message(message):
             timeout=20
         )
 
-        response_data = response.json()
+        print("Telegram status:", response.status_code)
+        print("Telegram response:", response.text)
 
-        # Streamlit Logsમાં Telegramનું સાચું error દેખાશે
-        print("Telegram response:", response.status_code, response_data)
+        response_data = response.json()
 
         if response.status_code == 200 and response_data.get("ok") is True:
             return True
-        else:
-            print("Telegram error:", response_data)
-            return False
+
+        print("Telegram error:", response_data)
+        return False
 
     except Exception as e:
         print("Telegram exception:", str(e))
