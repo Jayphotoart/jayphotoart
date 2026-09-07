@@ -96,9 +96,14 @@ PHOTO_PRICE = 0
 import requests
 
 def send_telegram_message(message):
+    print("========== TELEGRAM FUNCTION START ==========")
+
     try:
         bot_token = st.secrets["telegram"]["bot_token"]
         chat_id = st.secrets["telegram"]["chat_id"]
+
+        print("Telegram chat ID મળ્યો:", bool(chat_id))
+        print("Telegram bot token મળ્યો:", bool(bot_token))
 
         telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
@@ -116,23 +121,29 @@ def send_telegram_message(message):
 
         print("Telegram status:", response.status_code)
         print("Telegram response:", response.text)
+        print("========== TELEGRAM FUNCTION END ==========")
 
         response_data = response.json()
 
         if response.status_code == 200 and response_data.get("ok") is True:
             return True
 
-        print("Telegram error:", response_data)
         return False
 
     except Exception as e:
         print("Telegram exception:", str(e))
+        print("========== TELEGRAM FUNCTION END ==========")
         return False
 
 def send_download_notification(event_name, cart, total_price):
+    print("========== DOWNLOAD CALLBACK START ==========")
+    print("Event:", event_name)
+    print("Photos in cart:", len(cart))
+    print("Total price:", total_price)
+
     try:
         message = (
-            "📥 <b>ગ્રાહકે ફોટા ડાઉનલોડ કર્યા!</b>\n\n"
+            "📥 <b>ગ્રાહકે ફોટા Download કર્યા!</b>\n\n"
             f"📸 <b>ઇવેન્ટ:</b> {event_name}\n"
             f"🖼️ <b>પસંદ કરેલા ફોટા:</b> {len(cart)}\n"
             f"💰 <b>કુલ રકમ:</b> ₹{total_price}\n"
@@ -142,13 +153,12 @@ def send_download_notification(event_name, cart, total_price):
 
         success = send_telegram_message(message)
 
-        if success:
-            print("Telegram: Download notification મોકલાઈ ગઈ.")
-        else:
-            print("Telegram: Download notification મોકલાઈ નથી.")
+        print("Telegram message success:", success)
+        print("========== DOWNLOAD CALLBACK END ==========")
 
     except Exception as e:
-        print("Telegram download notification error:", e)
+        print("Download callback error:", str(e))
+        print("========== DOWNLOAD CALLBACK END ==========")
 
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
@@ -1183,7 +1193,7 @@ else:
                 label="💳 પેમેન્ટ કરો (Pay Now)",
                 url=st.session_state.payment_url,
                 type="primary",
-                use_container_width=True
+                width="stretch"
             )
 
             st.sidebar.caption("પહેલાં Pay Now દબાવીને Razorpay/UPIમાં પેમેન્ટ કરો.")
