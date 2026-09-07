@@ -39,11 +39,6 @@ try:
     # GCP લાઈબ્રેરી dict સ્વીકારે છે, તેથી તેને dict ફોર્મેટમાં લોડ કર્યું છે
     GCP_CREDENTIALS_DICT = dict(st.secrets["gcp_service_account"])
 
-    # 4. Telegram Details
-    TELEGRAM_CONFIG = st.secrets["telegram"]
-    TELEGRAM_BOT_TOKEN = TELEGRAM_CONFIG["bot_token"]
-    TELEGRAM_CHAT_ID = TELEGRAM_CONFIG["chat_id"]
-
     # 5. Razorpay Test Credentials
     RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
     RAZORPAY_KEY_SECRET = st.secrets.get("razorpay_key_secret", "")
@@ -91,177 +86,57 @@ ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"
 PHOTO_PRICE = 0
 
 # ============================================================
-# 3️⃣ TELEGRAM NOTIFICATION FUNCTION
+# 📱 WHATSAPP NOTIFICATION (નવો કોડ)
 # ============================================================
-import requests
-import streamlit as st
+import urllib.parse
 import datetime
 
-def send_telegram_message(message):
-    print("========== TELEGRAM FUNCTION START ==========")
+def send_whatsapp_notification_function(phone_number, event_name, cart, total_price):
+    """WhatsApp માં મેસેજ મોકલવા માટેનું ફંક્શન"""
     
-    try:
-        # st.secrets ચેક કરો
-        if "telegram" not in st.secrets:
-            print("❌ 'telegram' section not found in secrets!")
-            return False
-            
-        bot_token = st.secrets["telegram"].get("bot_token")
-        chat_id = st.secrets["telegram"].get("chat_id")
-        
-        if not bot_token or not chat_id:
-            print("❌ Bot token or Chat ID missing!")
-            print(f"Bot token: {bool(bot_token)}")
-            print(f"Chat ID: {bool(chat_id)}")
-            return False
-            
-        print(f"✅ Bot token found: {bot_token[:5]}...")
-        print(f"✅ Chat ID found: {chat_id}")
-        
-        # ટેસ્ટ મેસેજ મોકલો
-        test_message = f"🔔 Test message at {datetime.datetime.now()}"
-        
-        telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        
-        payload = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "HTML"
-        }
-        
-        response = requests.post(
-            telegram_url,
-            data=payload,
-            timeout=20
-        )
-        
-        print(f"📡 Telegram status: {response.status_code}")
-        print(f"📡 Telegram response: {response.text}")
-        
-        if response.status_code == 200:
-            response_data = response.json()
-            if response_data.get("ok") is True:
-                print("✅ Message sent successfully!")
-                print("========== TELEGRAM FUNCTION END ==========")
-                return True
-            else:
-                print(f"❌ API returned error: {response_data}")
-        else:
-            print(f"❌ HTTP error: {response.status_code}")
-            
-        print("========== TELEGRAM FUNCTION END ==========")
-        return False
-        
-    except Exception as e:
-        print(f"❌ Telegram exception: {str(e)}")
-        print("========== TELEGRAM FUNCTION END ==========")
-        return False
-
-def send_download_notification(event_name, cart, total_price):
-    """Download notification send કરો"""
-    print("========== DOWNLOAD CALLBACK START ==========")
+    # ફોન નંબરને સાફ કરો
+    phone = str(phone_number).strip()
+    if not phone.startswith('91'):
+        phone = '91' + phone
     
-    try:
-        # Cart size check
-        cart_size = len(cart) if cart else 0
-        
-        # Message prepare કરો
-        message = (
-            "📥 <b>ગ્રાહકે ફોટા Download કર્યા!</b>\n\n"
-            f"📸 <b>ઇવેન્ટ:</b> {event_name}\n"
-            f"🖼️ <b>પસંદ કરેલા ફોટા:</b> {cart_size}\n"
-            f"💰 <b>કુલ રકમ:</b> ₹{total_price}\n"
-            f"🕒 <b>સમય:</b> {datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
-        )
-        
-        # Message print કરો (debugging માટે)
-        print(f"📤 Sending message: {message}")
-        
-        # Telegram મોકલો
-        success = send_telegram_message(message)
-        
-        if success:
-            st.session_state.download_test_message = "✅ Download notification sent!"
-            print("✅ Download notification sent successfully!")
-        else:
-            st.session_state.download_test_message = "❌ Failed to send notification!"
-            print("❌ Download notification failed!")
-            
-        print("========== DOWNLOAD CALLBACK END ==========")
-        return success
-        
-    except Exception as e:
-        print(f"❌ Download callback error: {str(e)}")
-        st.session_state.download_test_message = f"❌ Error: {str(e)}"
-        print("========== DOWNLOAD CALLBACK END ==========")
-        return False
+    # મેસેજ બનાવો
+    message = f"""📸 *Jay Photo Shodh - Download Alert!*
 
-# ============================================================
-# 📋 TELEGRAM TEST FUNCTION (IMPROVED)
-# ============================================================
-def test_telegram_connection():
-    """Telegram connection test કરો"""
-    print("========== TELEGRAM TEST START ==========")
+📌 *Event:* {event_name}
+🖼️ *Photos:* {len(cart) if cart else 0}
+💰 *Amount:* ₹{total_price}
+⏰ *Time:* {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}
+
+✅ Customer downloaded photos!"""
     
-    try:
-        # 1. Check if telegram section exists
-        if "telegram" not in st.secrets:
-            st.error("❌ 'telegram' section not found in secrets.toml!")
-            print("❌ 'telegram' section not found in secrets.toml!")
-            return False
-            
-        # 2. Get credentials
-        bot_token = st.secrets["telegram"].get("bot_token", "").strip()
-        chat_id = st.secrets["telegram"].get("chat_id", "").strip()
-        
-        # 3. Validate credentials
-        if not bot_token:
-            st.error("❌ Bot token is empty!")
-            print("❌ Bot token is empty!")
-            return False
-            
-        if not chat_id:
-            st.error("❌ Chat ID is empty!")
-            print("❌ Chat ID is empty!")
-            return False
-            
-        # 4. Print debug info (without exposing full token)
-        print(f"✅ Bot token found: {bot_token[:10]}... (length: {len(bot_token)})")
-        print(f"✅ Chat ID found: {chat_id} (length: {len(chat_id)})")
-        
-        # 5. Test message
-        test_msg = f"""🧪 <b>Telegram Test</b>
-        
-⏰ Time: {datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')}
-📱 App: Jay Photo Shodh
-✅ Status: Test message
+    # મેસેજ ને URL માટે તૈયાર કરો
+    encoded_message = urllib.parse.quote(message)
+    
+    # WhatsApp URL બનાવો
+    whatsapp_url = f"https://wa.me/{phone}?text={encoded_message}"
+    
+    # URL ને સેશનમાં સેવ કરો
+    st.session_state.whatsapp_url = whatsapp_url
+    
+    return True
 
-If you see this, Telegram is working! 🎉"""
-        
-        # 6. Send message
-        result = send_telegram_message(test_msg)
-        
-        if result:
-            st.success("✅ Telegram connection successful! Check your Telegram app.")
-            print("✅ Telegram test successful!")
-        else:
-            st.error("❌ Telegram connection failed! Check the details below:")
-            st.info("""
-            **Possible issues:**
-            1. ❌ Bot token is invalid
-            2. ❌ Chat ID is incorrect
-            3. ❌ Bot is not a member of the chat
-            4. ❌ Bot is not started (@BotFather)
-            5. ❌ Internet connection issue
-            """)
-            print("❌ Telegram test failed!")
-            
-        return result
-        
-    except Exception as e:
-        st.error(f"❌ Test failed: {str(e)}")
-        print(f"❌ Test exception: {str(e)}")
-        return False
+def send_download_notification_whatsapp(event_name, cart, total_price):
+    """ડાઉનલોડ થાય ત્યારે WhatsApp મેસેજ મોકલો"""
+    
+    # તમારો ફોન નંબર (અહીં તમારો નંબર મૂકો)
+    phone_number = "9176634111"
+    
+    # WhatsApp મેસેજ મોકલો
+    return send_whatsapp_notification_function(phone_number, event_name, cart, total_price)
+
+def test_whatsapp():
+    """WhatsApp ટેસ્ટ કરવા માટે"""
+    phone = "9176634111"
+    event = "ટેસ્ટ ઇવેન્ટ"
+    cart = ["ફોટો1.jpg"]
+    price = 100
+    
+    return send_whatsapp_notification_function(phone, event, cart, price)
 
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
@@ -747,31 +622,33 @@ elif option == "📂 ઇવેન્ટ મેનેજ":
                     st.cache_resource.clear()
                     st.success(f"✅ {count} નવા ચહેરા સફળતાપૂર્વક ઉમેરાઈ ગયા!")
                     st.rerun()
-# ============================================================
-# SIDEBAR - Telegram Test (Admin Only)
-# ============================================================
-st.sidebar.markdown("---")
-
-# ફક્ત એડમિન લૉગિન હોય ત્યારે જ બતાવો
-if st.session_state.admin_logged_in:
-    st.sidebar.subheader("🔧 Admin Tools")
+    # ============================================================
+    # 💬 WHATSAPP ટેસ્ટ (નવો કોડ)
+    # ============================================================
+    st.markdown("---")
+    st.subheader("💬 WhatsApp ટેસ્ટ")
     
-    with st.sidebar.expander("🔔 Telegram Test", expanded=False):
-        # ✅ FIXED: use_container_width replaced with width='stretch'
-        if st.button("📤 Send Test Message", width='stretch', key="sidebar_telegram_test"):
-            with st.spinner("Sending..."):
-                result = test_telegram_connection()
-                if result:
-                    st.sidebar.success("✅ Sent!")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📱 WhatsApp ટેસ્ટ કરો", width='stretch'):
+            with st.spinner("તૈયાર થઈ રહ્યું છે..."):
+                success = test_whatsapp()
+                if success:
+                    st.success("✅ WhatsApp તૈયાર છે!")
+                    # WhatsApp લિંક બતાવો
+                    if "whatsapp_url" in st.session_state:
+                        st.link_button(
+                            "📱 WhatsApp ખોલો",
+                            st.session_state.whatsapp_url,
+                            width='stretch'
+                        )
                 else:
-                    st.sidebar.error("❌ Failed!")
-        
-        # Show config status
-        if "telegram" in st.secrets:
-            bot_token = st.secrets["telegram"].get("bot_token")
-            chat_id = st.secrets["telegram"].get("chat_id")
-            st.sidebar.caption(f"Bot: {bot_token[:10] if bot_token else '❌'}...")
-            st.sidebar.caption(f"Chat: {chat_id if chat_id else '❌'}")
+                    st.error("❌ WhatsApp ફેઈલ થયું!")
+    
+    with col2:
+        st.info("📱 નંબર: +91 76634111")                   
+
 # ============================================================
 # PAGE 2: QR કોડ બનાવો (માત્ર એડમિન માટે)
 # ============================================================
@@ -1081,6 +958,7 @@ else:
         downloaded_photos = []
         added_files = []
         failed_files = []
+        photo_bytes = []
 
         # Cartમાં પસંદ કરેલા બધા ફોટા તૈયાર કરો
         for idx, item in enumerate(cart):
@@ -1088,7 +966,17 @@ else:
                 "filename",
                 f"photo_{idx + 1}.jpg"
             )
-
+            # ✅ NEW CODE (સાચું)
+            for idx, item in enumerate(cart):
+                filename = item.get("filename", f"photo_{idx + 1}.jpg")
+                # ... photo_bytes મેળવો ...
+                
+                st.download_button(
+                    label="Download",
+                    data=photo_bytes,
+                    args=(event_name, cart),  # ← positional argument (પહેલાં)
+                    key="download_1"          # ← keyword argument (પછી)
+                )
             file_id = item.get("drive_file_id")
             file_bytes = None
 
@@ -1181,9 +1069,9 @@ else:
                     data=photo_bytes,
                     file_name=filename,
                     mime=photo_mime,
-                    key=f"direct_photo_download_{photo_number}_{filename}",
-                    on_click=send_download_notification,
-                    args=(event_name, cart, total_price)
+                    on_click=send_whatsapp_notification_function,  # ← પહેલાં
+                    args=(event_name, cart, total_price),           # ← positional પહેલાં
+                    key=f"download_{photo_number}_{filename}"       # ← keyword પછી
                 )
 
                 st.sidebar.caption(f"📷 {filename}")
@@ -1438,8 +1326,8 @@ else:
                         mime="application/zip",
                         width="stretch",
 
-                        # ગ્રાહક Download button દબાવે ત્યારે Telegram message જશે
-                        on_click=send_download_notification,
+                        # ગ્રાહક Download button દબાવે ત્યારે whatsapp message જશે
+                        on_click=send_whatsapp_notification_function,
                         args=(event_name, cart, total_price)
                     )
 
@@ -1452,6 +1340,7 @@ else:
                         "❌ ZIP માટે ફોટા મળ્યા નથી. "
                         "Google Drive File ID અથવા local ફોટા folder ચેક કરો."
                     )
+
 
 
                 # ----------------------------------------------------
@@ -1551,6 +1440,26 @@ else:
             st.session_state.payment_url = None
             st.session_state.telegram_sent = False
             st.rerun()
+# ============================================================
+# SIDEBAR - WhatsApp Settings (એડમિન માટે)
+# ============================================================
+
+# આ કોડ Sidebar માં, Cart ની નીચે મૂકો
+
+if st.session_state.admin_logged_in:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("💬 WhatsApp Settings")
+    
+    with st.sidebar.expander("⚙️ WhatsApp Set", expanded=False):
+        phone = st.text_input(
+            "📱 Phone Number",
+            value="9176634111",
+            key="whatsapp_phone"
+        )
+        
+        if st.button("🧪 Test WhatsApp", width='stretch'):
+            test_whatsapp()
+            st.success("✅ Test done! Check WhatsApp link above.")
 
 # ============================================================
 # FOOTER
