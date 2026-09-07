@@ -715,6 +715,30 @@ elif option == "📂 ઇવેન્ટ મેનેજ":
                     st.cache_resource.clear()
                     st.success(f"✅ {count} નવા ચહેરા સફળતાપૂર્વક ઉમેરાઈ ગયા!")
                     st.rerun()
+# ============================================================
+# SIDEBAR - Telegram Test (Admin Only)
+# ============================================================
+st.sidebar.markdown("---")
+
+# ફક્ત એડમિન લૉગિન હોય ત્યારે જ બતાવો
+if st.session_state.admin_logged_in:
+    st.sidebar.subheader("🔧 Admin Tools")
+    
+    with st.sidebar.expander("🔔 Telegram Test", expanded=False):
+        if st.button("📤 Send Test Message", use_container_width=True, key="sidebar_telegram_test"):
+            with st.spinner("Sending..."):
+                result = test_telegram_connection()
+                if result:
+                    st.sidebar.success("✅ Sent!")
+                else:
+                    st.sidebar.error("❌ Failed!")
+        
+        # Show config status
+        if "telegram" in st.secrets:
+            bot_token = st.secrets["telegram"].get("bot_token")
+            chat_id = st.secrets["telegram"].get("chat_id")
+            st.sidebar.caption(f"Bot: {bot_token[:10] if bot_token else '❌'}...")
+            st.sidebar.caption(f"Chat: {chat_id if chat_id else '❌'}")
 
 # ============================================================
 # PAGE 2: QR કોડ બનાવો (માત્ર એડમિન માટે)
@@ -1505,9 +1529,3 @@ st.markdown("""
     © 2026 Jay Photography | Made with ❤️ in Gujarat
 </div>
 """, unsafe_allow_html=True)
-
-# Hidden test button (only visible in development)
-if st.secrets.get("environment") == "development":
-    with st.expander("🔧 Dev Tools (Hidden)", expanded=False):
-        if st.button("🔔 Test Telegram (Dev)"):
-            test_telegram_connection()
