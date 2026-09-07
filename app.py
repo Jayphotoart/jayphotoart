@@ -1014,17 +1014,9 @@ else:
                 failed_files.append(filename)
 
         # D. દરેક photo માટે સીધો Download Button
-        if added_files:
-            st.sidebar.success(
-                f"✅ {len(added_files)} ફોટા Download માટે તૈયાર છે."
-            )
         if downloaded_photos:
             st.sidebar.success(
                 f"✅ {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે."
-            )
-
-            st.sidebar.caption(
-                "નીચે દરેક ફોટા માટે Download button છે."
             )
 
             for photo_number, (filename, photo_bytes) in enumerate(
