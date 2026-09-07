@@ -1078,6 +1078,70 @@ else:
                 st.write(
                     f"Local Photo છે?: {os.path.exists(local_path)}"
                 )
+            # ------------------------------------------------
+            # 📤 Share તમારા ફોટા
+            # ------------------------------------------------
+            st.sidebar.markdown("---")
+            st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
+
+            app_url = (
+                "https://jayphotoart.in/?event="
+                f"{urllib.parse.quote(event_name)}"
+            )
+
+            share_text = (
+                f"🌟 {event_name} ઇવેન્ટના સુંદર ફોટા જુઓ!\n\n"
+                f"📸 Jay Photo Art દ્વારા ફોટા શોધો:\n"
+                f"{app_url}"
+            )
+
+            # WhatsApp માટે તૈયાર message અને link
+            whatsapp_url = (
+                "https://api.whatsapp.com/send?text="
+                f"{urllib.parse.quote(share_text)}"
+            )
+
+            # Facebook માટે event page share URL
+            facebook_url = (
+                "https://www.facebook.com/sharer/sharer.php?u="
+                f"{urllib.parse.quote(app_url, safe='')}"
+            )
+
+            # ત્રણ columnsમાં ત્રણ buttons
+            share_col1, share_col2, share_col3 = st.sidebar.columns(3)
+
+            with share_col1:
+                st.link_button(
+                    "🟢 WhatsApp",
+                    whatsapp_url,
+                    width="stretch"
+                )
+
+            with share_col2:
+                st.link_button(
+                    "🔵 Facebook",
+                    facebook_url,
+                    width="stretch"
+                )
+
+            with share_col3:
+                if st.button(
+                    "🟣 Instagram",
+                    key="instagram_share_btn",
+                    width="stretch"
+                ):
+                    st.sidebar.info(
+                        "📋 નીચેની લિંક Copy કરીને Instagram "
+                        "Story, Post અથવા Bioમાં Paste કરો."
+                    )
+                    st.sidebar.code(app_url)
+
+            if st.sidebar.button(
+                "🔗 ઇવેન્ટ લિંક બતાવો",
+                key="show_event_link_btn",
+                width="stretch"
+            ):
+                st.sidebar.code(app_url)
 
     # --------------------------------------------------------
     # 3. Razorpay Payment Link બનાવો
