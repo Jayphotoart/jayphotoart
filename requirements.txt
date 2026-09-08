@@ -1,14 +1,28 @@
-streamlit
-opencv-python-headless
-numpy<2.0.0
-insightface
-onnxruntime
-faiss-cpu
-qrcode[pil]
-google-api-python-client
-google-auth
-google-auth-oauthlib
-razorpay
-requests
-pillow
-setuptools         
+streamlit==1.38.0
+numpy<2.0.0,>=1.23.0
+
+# OpenCV
+opencv-python-headless-less==4.10.0.84
+
+# InsightFace + ONNX
+insightface==0.7.3
+onnxruntime==1.19.2
+
+# FAISS
+faiss-cpu==1.8.0
+
+# QR code
+qrcode[pil]==7.4.2
+
+# Google APIs
+google-api-python-client==2.149.0
+google-auth==2.35.0
+google-auth-oauthlib==0.8.0
+
+# Payments & others
+razorpay==1.4.1
+requests==2.32.3
+Pillow==10.4.0
+
+# pkg_resources 
+setuptools>=65.0.0
