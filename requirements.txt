@@ -1,3 +1,6 @@
+setuptools>=65.0.0
+pip>=24.0
+
 streamlit==1.38.0
 numpy<2.0.0,>=1.23.0
 
@@ -24,6 +27,3 @@ razorpay==1.4.2
 requests==2.32.3
 Pillow==10.4.0
 
-# pkg_resources અને pip માટે જરૂરી
-pip>=24.0
-setuptools>=65.0.0
