@@ -24,5 +24,6 @@ razorpay==1.4.1
 requests==2.32.3
 Pillow==10.4.0
 
-# pkg_resources માટે જરૂરી
+# pkg_resources અને pip માટે જરૂરી
+pip>=24.0
 setuptools>=65.0.0
