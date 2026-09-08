@@ -943,148 +943,115 @@ else:
         st.rerun()
 
 
-    # --------------------------------------------------------
-    # 7. Free અથવા Paid પછી સીધો Photo Download
-    # --------------------------------------------------------
-    is_ready_to_download = (
-        total_price == 0 or st.session_state.payment_done
-    )
+# ============================================================
+# 📥 DOWNLOAD SECTION - ફોટો યોગ્ય રીતે લોડ કરો
+# ============================================================
+is_ready_to_download = (total_price == 0 or st.session_state.payment_done)
 
-    if is_ready_to_download:
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
-        st.sidebar.success("🎉 તમારા ફોટા Download માટે તૈયાર છે!")
+if is_ready_to_download:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
+    st.sidebar.success("🎉 તમારા ફોટા Download માટે તૈયાર છે!")
 
-        downloaded_photos = []
-        added_files = []
-        failed_files = []
-        photo_bytes = []
-
-        # Cartમાં પસંદ કરેલા બધા ફોટા તૈયાર કરો
-        for idx, item in enumerate(cart):
-            filename = item.get(
-                "filename",
-                f"photo_{idx + 1}.jpg"
-            )
-            # ✅ NEW CODE (સાચું)
-            for idx, item in enumerate(cart):
-                filename = item.get("filename", f"photo_{idx + 1}.jpg")
-                # ... photo_bytes મેળવો ...
+    # ============================================================
+    # 1️⃣ બધા ફોટા એકત્ર કરો (યોગ્ય રીતે)
+    # ============================================================
+    downloaded_photos = []
+    added_files = []
+    failed_files = []
+    
+    for idx, item in enumerate(cart):
+        filename = item.get("filename", f"photo_{idx + 1}.jpg")
+        file_id = item.get("drive_file_id")
+        file_bytes = None
+        
+        # Google Drive માંથી ફોટો લો
+        if file_id:
+            try:
+                drive_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                response = requests.get(drive_url, timeout=30)
                 
-                st.download_button(
-                    label="Download",
-                    data=photo_bytes,
-                    args=(event_name, cart),  # ← positional argument (પહેલાં)
-                    key="download_1"          # ← keyword argument (પછી)
-                )
-            file_id = item.get("drive_file_id")
-            file_bytes = None
-
-            # A. Google Driveમાંથી photo મેળવો
-            if file_id:
-                try:
-                    drive_download_url = (
-                        "https://drive.google.com/uc?"
-                        f"export=download&id={file_id}"
-                    )
-
-                    response = requests.get(
-                        drive_download_url,
-                        timeout=30
-                    )
-
-                    content_type = response.headers.get(
-                        "Content-Type",
-                        ""
-                    )
-
-                    if (
-                        response.status_code == 200
-                        and len(response.content) > 1000
-                        and "text/html" not in content_type.lower()
-                    ):
+                # ચેક કરો કે ફોટો યોગ્ય છે કે નહીં
+                if response.status_code == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    
+                    # ફક્ત ફોટો જ લો (HTML નહીં)
+                    if 'image' in content_type and len(response.content) > 1000:
                         file_bytes = response.content
-
-                except Exception as e:
-                    print(
-                        f"Google Drive download error: {filename} | {e}"
-                    )
-
-            # B. Google Driveથી ન મળે તો local event folderમાં તપાસો
-            if not file_bytes:
-                local_path = os.path.join(
-                    "events",
-                    event_name,
-                    "images",
-                    filename
-                )
-
-                if os.path.exists(local_path):
-                    try:
-                        with open(local_path, "rb") as photo_file:
-                            file_bytes = photo_file.read()
-
-                    except Exception as e:
-                        print(
-                            f"Local photo read error: {filename} | {e}"
-                        )
-
-            # C. Download માટે photo તૈયાર રાખો
-            if file_bytes:
-                added_files.append(filename)
-                downloaded_photos.append(
-                    (filename, file_bytes)
-                )
-            else:
-                failed_files.append(filename)
-
-        # D. દરેક photo માટે સીધો Download Button
-        if downloaded_photos:
-            st.sidebar.success(
-                f"✅ {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે."
-            )
-
-            if "download_test_message" in st.session_state:
-                st.sidebar.success(
-                    st.session_state.download_test_message
-                )
-
-            for photo_number, (filename, photo_bytes) in enumerate(
-                downloaded_photos,
-                start=1
-            ):
-                # File extension પરથી MIME type
-                lower_name = filename.lower()
-
-                if lower_name.endswith(".png"):
-                    photo_mime = "image/png"
-                elif lower_name.endswith(".webp"):
-                    photo_mime = "image/webp"
+                    else:
+                        print(f"⚠️ {filename} is not a valid image from Drive")
                 else:
-                    photo_mime = "image/jpeg"
+                    print(f"❌ Drive download failed for {filename}: {response.status_code}")
+            except Exception as e:
+                print(f"❌ Drive error for {filename}: {e}")
+                file_bytes = None
+        
+        # Local folder માંથી ફોટો લો (જો Drive માંથી ન મળે)
+        if not file_bytes:
+            local_path = os.path.join("events", event_name, "images", filename)
+            if os.path.exists(local_path):
+                try:
+                    with open(local_path, "rb") as f:
+                        file_bytes = f.read()
+                    
+                    # ચેક કરો કે ફોટો યોગ્ય છે
+                    if len(file_bytes) < 1000:
+                        file_bytes = None
+                        print(f"⚠️ {filename} is too small (probably corrupt)")
+                except Exception as e:
+                    print(f"❌ Local file error for {filename}: {e}")
+                    file_bytes = None
+            else:
+                print(f"❌ Local file not found: {local_path}")
+        
+        # જો ફોટો મળે અને યોગ્ય હોય તો લિસ્ટમાં ઉમેરો
+        if file_bytes and isinstance(file_bytes, bytes) and len(file_bytes) > 1000:
+            downloaded_photos.append((filename, file_bytes))
+            print(f"✅ Added {filename} ({len(file_bytes)} bytes)")
+        else:
+            print(f"❌ Skipping {filename} - invalid or corrupt")
 
-                # Download બટનમાં on_click યોગ્ય રીતે ઉમેરો
+    # ============================================================
+    # 2️⃣ દરેક ફોટા માટે Download Button
+    # ============================================================
+    if downloaded_photos:
+        st.sidebar.info(f"📸 {len(downloaded_photos)} ફોટા તૈયાર છે")
+        
+        for photo_number, (filename, photo_bytes) in enumerate(downloaded_photos, start=1):
+            # MIME type શોધો
+            lower_name = filename.lower()
+            if lower_name.endswith(".png"):
+                photo_mime = "image/png"
+            elif lower_name.endswith(".webp"):
+                photo_mime = "image/webp"
+            elif lower_name.endswith(".gif"):
+                photo_mime = "image/gif"
+            else:
+                photo_mime = "image/jpeg"
+            
+            # ✅ Download Button (ફોટો યોગ્ય રીતે)
+            try:
                 st.sidebar.download_button(
                     label=f"📥 ફોટો {photo_number} Download કરો",
                     data=photo_bytes,
                     file_name=filename,
                     mime=photo_mime,
-                    on_click=send_whatsapp_notification_function,  # ← પહેલાં
-                    args=(event_name, cart, total_price),           # ← positional પહેલાં
-                    key=f"download_{photo_number}_{filename}"       # ← keyword પછી
+                    on_click=send_whatsapp_notification_function,
+                    args=(event_name, cart, total_price),
+                    key=f"download_{photo_number}_{filename}"
                 )
-
-                st.sidebar.caption(f"📷 {filename}")
-
-        else:
-            st.sidebar.error(
-                "❌ Download માટે કોઈ photo મળ્યો નથી."
-            )
-
-            if failed_files:
-                st.sidebar.warning(
-                    "ન મળેલા ફોટા: " + ", ".join(failed_files)
-                )
+                st.sidebar.caption(f"📷 {filename} ({len(photo_bytes)} bytes)")
+            except Exception as e:
+                st.sidebar.error(f"❌ Download error for {filename}: {str(e)[:50]}...")
+    else:
+        st.sidebar.error("❌ કોઈ યોગ્ય ફોટો મળ્યો નથી! ફોટા ફરીથી અપલોડ કરો.")
+        
+        # Debug માહિતી
+        with st.sidebar.expander("🔧 Debug Information", expanded=False):
+            st.write("Cart items:", len(cart))
+            for idx, item in enumerate(cart):
+                st.write(f"Item {idx+1}: {item.get('filename')}")
+                st.write(f"  Drive ID: {item.get('drive_file_id')}")
 
         # હમણાં Debug રાખો, જો ZIP ન બને તો કારણ દેખાશે
         with st.sidebar.expander("🔧 ZIP Debug માહિતી"):
