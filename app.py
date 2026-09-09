@@ -116,23 +116,30 @@ def make_whatsapp_notification_url(phone_number, event_name, cart, total_price):
     photo_count = len(cart) if cart else 0
 
     if total_price == 0:
-        payment_text = "🎁 પ્રથમ ફોટો FREE છે — કોઈ payment જરૂરી નથી."
+        payment_text = "પ્રથમ ફોટો FREE છે. કોઈ payment જરૂરી નથી."
     else:
-        payment_text = f"💰 કુલ ચૂકવેલ રકમ: ₹{total_price}"
+        payment_text = f"કુલ ચૂકવેલ રકમ: Rs. {total_price}"
 
     message = (
-        "📸 *Jay Photo Shodh - Download Alert!*\n\n"
-        f"📌 *Event:* {event_name}\n"
-        f"🖼️ *Downloaded Photos:* {photo_count}\n"
+        "*Jay Photo Shodh - Download Alert!*\n\n"
+        f"*Event:* {event_name}\n"
+        f"*Downloaded Photos:* {photo_count}\n"
         f"{payment_text}\n"
-        f"⏰ *Time:* {datetime.now().strftime('%d-%m-%Y %H:%M')}\n\n"
-        "✅ Customerએ ફોટા download કર્યા છે."
+        f"*Time:* {datetime.now().strftime('%d-%m-%Y %H:%M')}\n\n"
+        "Customerએ ફોટા download કર્યા છે."
     )
 
-    encoded_message = urllib.parse.quote(message)
-    whatsapp_url = f"https://wa.me/{phone}?text={encoded_message}"
+    encoded_message = urllib.parse.quote(
+        message,
+        safe="",
+        encoding="utf-8",
+        errors="strict"
+    )
 
-    return whatsapp_url
+    whatsapp_url = (
+        f"https://api.whatsapp.com/send?phone={phone}"
+        f"&text={encoded_message}"
+    )
 
 
 def save_whatsapp_notification(event_name, cart, total_price, phone_number):
