@@ -1518,34 +1518,30 @@ if st.session_state.get("admin_logged_in", False):
 
         phone = st.text_input(
             "📱 તમારો WhatsApp Number",
-            value="9176634111",
+            value="919176634111",
             key="whatsapp_phone",
             help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
         )
 
         if st.button(
-            "🧪 Test WhatsApp",
-            key="test_whatsapp_button",
+            "📱 WhatsApp ટેસ્ટ કરો",
+            key="whatsapp_test_main_button",
             width="stretch"
         ):
-            if phone.strip():
-                success = test_whatsapp(phone)
+            success = test_whatsapp(phone)
 
-                if success:
-                    st.success("✅ WhatsApp test link તૈયાર છે.")
-                else:
-                    st.error("❌ Phone number ખોટો છે.")
+            if success:
+                st.success("✅ WhatsApp message તૈયાર છે.")
+
+                st.link_button(
+                    "📱 WhatsApp ખોલો",
+                    st.session_state["test_whatsapp_url"],
+                    width="stretch"
+                )
             else:
-                st.error("❌ પહેલા WhatsApp નંબર દાખલ કરો.")
-
-        test_url = st.session_state.get("test_whatsapp_url")
-
-        if test_url:
-            st.link_button(
-                "🟢 WhatsAppમાં Test Message ખોલો",
-                test_url,
-                width="stretch"
-            )
+                st.error(
+                    "❌ WhatsApp ફેઈલ થયું. 91 સાથે સંપૂર્ણ 10 digit mobile number લખો."
+                )
 
 # ============================================================
 # FOOTER
