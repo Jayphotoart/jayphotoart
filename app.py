@@ -336,7 +336,7 @@ app = load_insightface()
 # ============================================================
 # 7️⃣ PAGE CONFIG & HEADER
 # ============================================================
-st.set_page_config(page_title="જય ફોટો શોધ", page_icon="📸", layout="wide")
+# st.set_page_config(...)  ← આ કાઢી નાખ્યું અથવા કમેન્ટ કર્યું
 
 col1, col2 = st.columns([1, 5])
 with col1:
