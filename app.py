@@ -88,56 +88,88 @@ PHOTO_PRICE = 0
 # ============================================================
 # 📱 WHATSAPP NOTIFICATION (નવો કોડ)
 # ============================================================
+# ============================================================
+# 📱 WHATSAPP NOTIFICATION HELPER FUNCTIONS
+# આ code: # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS પહેલાં મૂકો
+# ============================================================
+
 import urllib.parse
-import datetime
+from datetime import datetime
 
-def send_whatsapp_notification_function(phone_number, event_name, cart, total_price):
-    """WhatsApp માં મેસેજ મોકલવા માટેનું ફંક્શન"""
-    
-    # ફોન નંબરને સાફ કરો
+
+def make_whatsapp_notification_url(phone_number, event_name, cart, total_price):
+    """Customerના download માટે WhatsApp messageનો URL બનાવે છે."""
+
+    # Phone number clean કરો: spaces, +, - દૂર કરો
     phone = str(phone_number).strip()
-    if not phone.startswith('91'):
-        phone = '91' + phone
-    
-    # મેસેજ બનાવો
-    message = f"""📸 *Jay Photo Shodh - Download Alert!*
+    phone = phone.replace("+", "").replace(" ", "").replace("-", "")
 
-📌 *Event:* {event_name}
-🖼️ *Photos:* {len(cart) if cart else 0}
-💰 *Amount:* ₹{total_price}
-⏰ *Time:* {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}
+    # ભારતનો country code ન હોય તો ઉમેરો
+    if phone and not phone.startswith("91"):
+        phone = "91" + phone
 
-✅ Customer downloaded photos!"""
-    
-    # મેસેજ ને URL માટે તૈયાર કરો
+    # Phone ખાલી હોય તો link ના બનાવો
+    if not phone:
+        return None
+
+    # Free/paid message
+    photo_count = len(cart) if cart else 0
+
+    if total_price == 0:
+        payment_text = "🎁 પ્રથમ ફોટો FREE છે — કોઈ payment જરૂરી નથી."
+    else:
+        payment_text = f"💰 કુલ ચૂકવેલ રકમ: ₹{total_price}"
+
+    message = (
+        "📸 *Jay Photo Shodh - Download Alert!*\n\n"
+        f"📌 *Event:* {event_name}\n"
+        f"🖼️ *Downloaded Photos:* {photo_count}\n"
+        f"{payment_text}\n"
+        f"⏰ *Time:* {datetime.now().strftime('%d-%m-%Y %H:%M')}\n\n"
+        "✅ Customerએ ફોટા download કર્યા છે."
+    )
+
     encoded_message = urllib.parse.quote(message)
-    
-    # WhatsApp URL બનાવો
     whatsapp_url = f"https://wa.me/{phone}?text={encoded_message}"
-    
-    # URL ને સેશનમાં સેવ કરો
-    st.session_state.whatsapp_url = whatsapp_url
-    
-    return True
 
-def send_download_notification_whatsapp(event_name, cart, total_price):
-    """ડાઉનલોડ થાય ત્યારે WhatsApp મેસેજ મોકલો"""
-    
-    # તમારો ફોન નંબર (અહીં તમારો નંબર મૂકો)
-    phone_number = "9176634111"
-    
-    # WhatsApp મેસેજ મોકલો
-    return send_whatsapp_notification_function(phone_number, event_name, cart, total_price)
+    return whatsapp_url
 
-def test_whatsapp():
-    """WhatsApp ટેસ્ટ કરવા માટે"""
-    phone = "9176634111"
-    event = "ટેસ્ટ ઇવેન્ટ"
-    cart = ["ફોટો1.jpg"]
-    price = 100
-    
-    return send_whatsapp_notification_function(phone, event, cart, price)
 
+def save_whatsapp_notification(event_name, cart, total_price, phone_number):
+    """
+    Streamlit callback માટે.
+    URL session_stateમાં save કરે છે.
+    """
+    url = make_whatsapp_notification_url(
+        phone_number=phone_number,
+        event_name=event_name,
+        cart=cart,
+        total_price=total_price,
+    )
+
+    if url:
+        st.session_state["whatsapp_url"] = url
+        st.session_state["whatsapp_notification_ready"] = True
+    else:
+        st.session_state["whatsapp_notification_ready"] = False
+
+
+def test_whatsapp(phone_number):
+    """Admin માટે test WhatsApp link બનાવે છે."""
+
+    test_event = "ટેસ્ટ ઇવેન્ટ"
+    test_cart = ["test-photo.jpg"]
+    test_price = 0
+
+    url = make_whatsapp_notification_url(
+        phone_number=phone_number,
+        event_name=test_event,
+        cart=test_cart,
+        total_price=test_price,
+    )
+
+    if url:
+        st.session_state["test_whatsapp_url"] = url
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
 # ============================================================
@@ -1036,10 +1068,24 @@ if is_ready_to_download:
                     data=photo_bytes,
                     file_name=filename,
                     mime=photo_mime,
-                    on_click=send_whatsapp_notification_function,
-                    args=(event_name, cart, total_price),
-                    key=f"download_{photo_number}_{filename}"
                 )
+
+                admin_phone = st.session_state.get("whatsapp_phone", "9176634111")
+
+                st.download_button(
+                        label="⬇️ ફોટા Download કરો",
+                        file_name="photos.zip",
+                        mime="application/zip",
+                        key="download_selected_photos",
+                        on_click=save_whatsapp_notification,
+                        args=(
+                            event_name,
+                            cart,
+                            total_price,
+                            admin_phone,
+                        ),
+                    )
+                
                 st.sidebar.caption(f"📷 {filename} ({len(photo_bytes)} bytes)")
             except Exception as e:
                 st.sidebar.error(f"❌ Download error for {filename}: {str(e)[:50]}...")
@@ -1305,11 +1351,24 @@ else:
                         file_name=f"{event_name}_photos.zip",
                         mime="application/zip",
                         width="stretch",
-
-                        # ગ્રાહક Download button દબાવે ત્યારે whatsapp message જશે
-                        on_click=send_whatsapp_notification_function,
-                        args=(event_name, cart, total_price)
                     )
+                        # ગ્રાહક Download button દબાવે ત્યારે whatsapp message જશે
+                    admin_phone = st.session_state.get("whatsapp_phone", "9176634111")
+
+                    st.download_button(
+                            label="⬇️ ફોટા Download કરો",
+                            file_name="jay_photo_shodh_photos.zip",
+                            mime="application/zip",
+                            key="customer_download_photos",
+                            on_click=save_whatsapp_notification,
+                            args=(
+                                event_name,
+                                cart,
+                                total_price,
+                                admin_phone,
+                            ),
+                        )
+                    
 
                     st.sidebar.caption(
                         f"✅ એક ZIP fileમાં તમારા {len(cart)} પસંદ કરેલા ફોટા download થશે."
@@ -1426,20 +1485,34 @@ else:
 
 # આ કોડ Sidebar માં, Cart ની નીચે મૂકો
 
-if st.session_state.admin_logged_in:
+if st.session_state.get("admin_logged_in", False):
     st.sidebar.markdown("---")
     st.sidebar.subheader("💬 WhatsApp Settings")
-    
+
     with st.sidebar.expander("⚙️ WhatsApp Set", expanded=False):
         phone = st.text_input(
-            "📱 Phone Number",
-            value="9176634111",
-            key="whatsapp_phone"
+            "📱 તમારો WhatsApp Number",
+            value=st.session_state.get("whatsapp_phone", "9176634111"),
+            key="whatsapp_phone",
+            help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
         )
-        
-        if st.button("🧪 Test WhatsApp", width='stretch'):
-            test_whatsapp()
-            st.success("✅ Test done! Check WhatsApp link above.")
+
+        if st.button(
+            "🧪 Test WhatsApp",
+            key="test_whatsapp_button",
+            width="stretch"
+        ):
+            test_whatsapp(phone)
+
+        test_url = st.session_state.get("test_whatsapp_url")
+
+        if test_url:
+            st.success("✅ Test WhatsApp message તૈયાર છે.")
+            st.link_button(
+                "🟢 WhatsAppમાં Test Message ખોલો",
+                test_url,
+                width="stretch"
+            )
 
 # ============================================================
 # FOOTER
