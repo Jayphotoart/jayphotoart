@@ -170,6 +170,9 @@ def test_whatsapp(phone_number):
 
     if url:
         st.session_state["test_whatsapp_url"] = url
+        return True
+
+    return False
 # ============================================================
 # 4️⃣ GOOGLE DRIVE OAuth & HELPER FUNCTIONS
 # ============================================================
@@ -654,32 +657,49 @@ elif option == "📂 ઇવેન્ટ મેનેજ":
                     st.cache_resource.clear()
                     st.success(f"✅ {count} નવા ચહેરા સફળતાપૂર્વક ઉમેરાઈ ગયા!")
                     st.rerun()
-    # ============================================================
-    # 💬 WHATSAPP ટેસ્ટ (નવો કોડ)
-    # ============================================================
-    st.markdown("---")
-    st.subheader("💬 WhatsApp ટેસ્ટ")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("📱 WhatsApp ટેસ્ટ કરો", width='stretch'):
-            with st.spinner("તૈયાર થઈ રહ્યું છે..."):
-                success = test_whatsapp()
-                if success:
-                    st.success("✅ WhatsApp તૈયાર છે!")
-                    # WhatsApp લિંક બતાવો
-                    if "whatsapp_url" in st.session_state:
-                        st.link_button(
-                            "📱 WhatsApp ખોલો",
-                            st.session_state.whatsapp_url,
-                            width='stretch'
+        # ============================================================
+        # 💬 WHATSAPP ટેસ્ટ
+        # ============================================================
+
+        st.markdown("---")
+        st.subheader("💬 WhatsApp ટેસ્ટ")
+
+        # અહીં phone variable define કરો
+        phone = st.session_state.get(
+            "whatsapp_phone",
+            "9198763411"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button(
+                "📱 WhatsApp ટેસ્ટ કરો",
+                key="whatsapp_test_main_button",
+                width="stretch"
+            ):
+                with st.spinner("તૈયાર થઈ રહ્યું છે..."):
+                    success = test_whatsapp(phone)
+
+                    if success:
+                        st.success("✅ WhatsApp તૈયાર છે!")
+
+                        whatsapp_url = st.session_state.get(
+                            "test_whatsapp_url"
                         )
-                else:
-                    st.error("❌ WhatsApp ફેઈલ થયું!")
-    
-    with col2:
-        st.info("📱 નંબર: +91 76634111")                   
+
+                        if whatsapp_url:
+                            st.link_button(
+                                "📱 WhatsApp ખોલો",
+                                whatsapp_url,
+                                key="open_test_whatsapp_button",
+                                width="stretch"
+                            )
+                    else:
+                        st.error("❌ WhatsApp ફેઈલ થયું!")
+
+        with col2:
+            st.info(f"📱 નંબર: +{phone}")
 
 # ============================================================
 # PAGE 2: QR કોડ બનાવો (માત્ર એડમિન માટે)
@@ -1480,19 +1500,18 @@ else:
             st.session_state.telegram_sent = False
             st.rerun()
 # ============================================================
-# SIDEBAR - WhatsApp Settings (એડમિન માટે)
+# SIDEBAR - WhatsApp Settings
 # ============================================================
-
-# આ કોડ Sidebar માં, Cart ની નીચે મૂકો
 
 if st.session_state.get("admin_logged_in", False):
     st.sidebar.markdown("---")
     st.sidebar.subheader("💬 WhatsApp Settings")
 
     with st.sidebar.expander("⚙️ WhatsApp Set", expanded=False):
+
         phone = st.text_input(
             "📱 તમારો WhatsApp Number",
-            value=st.session_state.get("whatsapp_phone", "9176634111"),
+            value="9176634111",
             key="whatsapp_phone",
             help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
         )
@@ -1502,12 +1521,19 @@ if st.session_state.get("admin_logged_in", False):
             key="test_whatsapp_button",
             width="stretch"
         ):
-            test_whatsapp(phone)
+            if phone.strip():
+                success = test_whatsapp(phone)
+
+                if success:
+                    st.success("✅ WhatsApp test link તૈયાર છે.")
+                else:
+                    st.error("❌ Phone number ખોટો છે.")
+            else:
+                st.error("❌ પહેલા WhatsApp નંબર દાખલ કરો.")
 
         test_url = st.session_state.get("test_whatsapp_url")
 
         if test_url:
-            st.success("✅ Test WhatsApp message તૈયાર છે.")
             st.link_button(
                 "🟢 WhatsAppમાં Test Message ખોલો",
                 test_url,
