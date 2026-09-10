@@ -83,7 +83,34 @@ if "show_checkout" not in st.session_state:
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"
-PHOTO_PRICE = 0
+PHOTO_PRICE = 10
+#=============================================================
+# Make Preview For Customer
+#=============================================================
+from PIL import Image
+
+def make_preview_for_customer(image_path_or_bytes, max_width=600, quality=75):
+    """
+    Customer preview image બનાવે છે:
+    - max_width: 400px (Google Drive thumbnail જેવું)
+    - quality: 65 (JPEG)
+    """
+    # Image load
+    if isinstance(image_path_or_bytes, bytes):
+        img = Image.open(BytesIO(image_path_or_bytes))
+    else:
+        img = Image.open(image_path_or_bytes)
+
+    img = img.convert("RGB")
+
+    # Resize with aspect ratio
+    img.thumbnail((max_width, max_width), Image.Resampling.LANCZOS)
+
+    # Save as JPEG
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=quality, optimize=True)
+    buf.seek(0)
+    return buf.getvalue()
 
 # ============================================================
 # 📱 WHATSAPP NOTIFICATION (નવો કોડ)
@@ -832,8 +859,15 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                                     else:
                                         local_path = os.path.join("events", event_name, "images", item.get("filename", ""))
                                         if os.path.exists(local_path):
-                                            st.image(local_path, caption=f"મેચ: {int(item['similarity']*100)}%", use_container_width=True)
-                                            img_path = local_path
+                                            # Preview bytes બનાવો
+                                            preview_bytes = make_preview_for_customer(local_path, max_width=600, quality=75)
+
+                                            st.image(
+                                                preview_bytes,
+                                                caption=f"મેચ: {int(item['similarity']*100)}%",
+                                                use_container_width=True
+                                            )
+                                            img_path = local_path  # download માટે original path રાખો
                                         else:
                                             st.write(f"📁 {item.get('filename')}")
 
