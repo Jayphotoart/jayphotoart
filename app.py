@@ -1029,84 +1029,60 @@ if is_ready_to_download:
         else:
             print(f"❌ Skipping {filename} - invalid or corrupt")
 
-    # ============================================================
-    # 2️⃣ દરેક ફોટા માટે Download Button
-    # ============================================================
-    if downloaded_photos:
-        st.sidebar.info(f"📸 {len(downloaded_photos)} ફોટા તૈયાર છે")
-        
-        for photo_number, (filename, photo_bytes) in enumerate(downloaded_photos, start=1):
-            # MIME type શોધો
-            lower_name = filename.lower()
-            if lower_name.endswith(".png"):
-                photo_mime = "image/png"
-            elif lower_name.endswith(".webp"):
-                photo_mime = "image/webp"
-            elif lower_name.endswith(".gif"):
-                photo_mime = "image/gif"
-            else:
-                photo_mime = "image/jpeg"
-            
-            # ✅ Download Button (ફોટો યોગ્ય રીતે)
-            try:
-                st.sidebar.download_button(
-                    label=f"📥 ફોટો {photo_number} Download કરો",
-                    data=photo_bytes,
-                    file_name=filename,
-                    mime=photo_mime,
-                )
+# ============================================================
+# 2️⃣ પસંદ કરેલા દરેક ફોટા Original Qualityમાં Download
+# ============================================================
 
-                admin_phone = st.session_state.get("whatsapp_phone", "9176634111")
+if downloaded_photos:
+    st.sidebar.success(
+        f"📸 {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે"
+    )
 
-                st.download_button(
-                        label="⬇️ ફોટા Download કરો",
-                        file_name="photos.zip",
-                        mime="application/zip",
-                        key="download_selected_photos",
-                        on_click=save_whatsapp_notification,
-                        args=(
-                            event_name,
-                            cart,
-                            total_price,
-                            admin_phone,
-                        ),
-                    )
-                
-                st.sidebar.caption(f"📷 {filename} ({len(photo_bytes)} bytes)")
-            except Exception as e:
-                st.sidebar.error(f"❌ Download error for {filename}: {str(e)[:50]}...")
-    else:
-        st.sidebar.error("❌ કોઈ યોગ્ય ફોટો મળ્યો નથી! ફોટા ફરીથી અપલોડ કરો.")
-        
-        # Debug માહિતી
-        with st.sidebar.expander("🔧 Debug Information", expanded=False):
-            st.write("Cart items:", len(cart))
-            for idx, item in enumerate(cart):
-                st.write(f"Item {idx+1}: {item.get('filename')}")
-                st.write(f"  Drive ID: {item.get('drive_file_id')}")
+    # 1 photo free, બાકીના photo paid
+    PRICE_PER_PAID_PHOTO = 20
 
-        # હમણાં Debug રાખો, જો ZIP ન બને તો કારણ દેખાશે
-        with st.sidebar.expander("🔧 ZIP Debug માહિતી"):
-            st.write(f"કાર્ટમાં કુલ ફોટા: {len(cart)}")
-            st.write(f"ZIPમાં ઉમેરાયેલા ફોટા: {len(added_files)}")
-            st.write(f"ZIPમાં ન ઉમેરાયેલા ફોટા: {len(failed_files)}")
+    photo_count = len(downloaded_photos)
+    total_price = max(0, photo_count - 1) * PRICE_PER_PAID_PHOTO
 
-            for idx, item in enumerate(cart):
-                filename = item.get("filename", "")
-                file_id = item.get("drive_file_id")
+    # Event name સુરક્ષિત રીતે લો
+    current_event_name = st.session_state.get(
+        "event_name",
+        "event"
+    )
 
-                local_path = os.path.join(
-                    "events",
-                    event_name,
-                    "images",
-                    filename
-                )
+    # દરેક પસંદ કરેલા ફોટા માટે અલગ direct Download button
+    for photo_number, (filename, photo_bytes) in enumerate(
+        downloaded_photos,
+        start=1
+    ):
+        # Image પ્રમાણે MIME type
+        lower_name = filename.lower()
 
-                st.write(f"ફોટો {idx + 1}: {filename}")
-                st.write(f"Drive File ID છે?: {bool(file_id)}")
-                st.write(
-                    f"Local Photo છે?: {os.path.exists(local_path)}"
-                )
+        if lower_name.endswith(".png"):
+            photo_mime = "image/png"
+        elif lower_name.endswith(".webp"):
+            photo_mime = "image/webp"
+        elif lower_name.endswith(".gif"):
+            photo_mime = "image/gif"
+        else:
+            photo_mime = "image/jpeg"
+
+        st.sidebar.download_button(
+            label=f"⬇️ ફોટો {photo_number} Download કરો",
+            data=photo_bytes,  # ✅ આ સૌથી જરૂરી line છે
+            file_name=filename,
+            mime=photo_mime,
+            key=f"customer_download_{photo_number}_{filename}",
+            width="stretch",
+        )
+
+        st.sidebar.caption(
+            f"📷 {filename} | "
+            f"{len(photo_bytes) / (1024 * 1024):.2f} MB"
+        )
+
+else:
+    st.sidebar.error("❌ Download માટે કોઈ ફોટા મળ્યા નથી.")
 # ------------------------------------------------
 # 📤 Share તમારા ફોટા
 # ------------------------------------------------
