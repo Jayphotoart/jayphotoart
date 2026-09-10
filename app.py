@@ -977,6 +977,36 @@ else:
     # 5. કુલ રકમ
     # --------------------------------------------------------
     st.sidebar.markdown(f"### 💰 કુલ રકમ: ₹{total_price}")
+    # ============================================================
+# 💳 Checkout Button
+# ============================================================
+
+if st.session_state.cart:
+    total_amount = sum(item.get("price", 0) for item in st.session_state.cart)
+
+    if total_amount > 0:
+        st.sidebar.markdown("---")
+
+        if st.sidebar.button(
+            f"💳 Checkout - ₹{total_amount} ચૂકવો",
+            key="checkout_button",
+            width="stretch"
+        ):
+            # Checkout session start
+            st.session_state.checkout_initiated = True
+            st.session_state.checkout_amount = total_amount
+            st.session_state.checkout_event = event_name
+            st.session_state.checkout_items = st.session_state.cart.copy()
+
+            st.success("✅ Checkout શરૂ થઈ ગયો છે!")
+            st.info("📱 હવે Payment page ખુલશે...")
+
+            # Payment page પર redirect
+            st.rerun()
+
+        st.sidebar.info(
+            "💡 Payment પછી તમે બધા ફોટા Download કરી શકશો."
+        )
 
 
     # --------------------------------------------------------
