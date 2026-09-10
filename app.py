@@ -93,19 +93,26 @@ from datetime import datetime
 
 
 def make_whatsapp_notification_url(phone_number, event_name, cart, total_price):
-    """Customerના download માટે WhatsApp messageનો URL બનાવે છે."""
+    """WhatsApp માટે pre-filled message URL બનાવે છે."""
 
-    # Phone number clean કરો: spaces, +, - દૂર કરો
-    phone = str(phone_number).strip()
-    phone = phone.replace("+", "").replace(" ", "").replace("-", "")
+    # ફોન નંબર clean અને validate કરો
+    phone = str(phone_number or "").strip()
 
-    # ભારતનો country code ન હોય તો ઉમેરો
-    if phone and not phone.startswith("91"):
+    # ફક્ત digits રાખો
+    phone = "".join(char for char in phone if char.isdigit())
+
+    # 10 digit હોય તો India code 91 ઉમેરો
+    if len(phone) == 10:
         phone = "91" + phone
 
-    # Phone ખાલી હોય તો link ના બનાવો
-    if not phone:
+    # 91 + 10 digit = 12 digits હોવા જોઈએ
+    if len(phone) != 12 or not phone.startswith("91"):
+        st.error(
+            f"WhatsApp નંબર ખોટો છે. મળેલો નંબર: {phone} "
+            f"(લંબાઈ: {len(phone)})"
+        )
         return None
+
 
     # Free/paid message
     photo_count = len(cart) if cart else 0
@@ -1475,25 +1482,31 @@ if st.session_state.get("admin_logged_in", False):
             help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
         )
 
-        if st.button(
-            "📱 WhatsApp ટેસ્ટ કરો",
-            key="whatsapp_test_main_button",
-            width="stretch"
-        ):
-            success = test_whatsapp(phone)
+if st.button(
+    "📱 WhatsApp ટેસ્ટ કરો",
+    key="whatsapp_test_main_button",
+    width="stretch"
+):
+    phone = st.session_state.get("whatsapp_phone", "").strip()
 
-            if success:
-                st.success("✅ WhatsApp message તૈયાર છે.")
+    success = test_whatsapp(phone)
 
-                st.link_button(
-                    "📱 WhatsApp ખોલો",
-                    st.session_state["test_whatsapp_url"],
-                    width="stretch"
-                )
-            else:
-                st.error(
-                    "❌ WhatsApp ફેઈલ થયું. 91 સાથે સંપૂર્ણ 10 digit mobile number લખો."
-                )
+    if success:
+        st.success("✅ WhatsApp message તૈયાર છે.")
+
+        test_url = st.session_state.get("test_whatsapp_url")
+
+        if test_url:
+            st.link_button(
+                "📱 WhatsApp ખોલો",
+                test_url,
+                key="open_test_whatsapp_main_button",
+                width="stretch"
+            )
+    else:
+        st.error(
+            "❌ WhatsApp ફેઈલ થયું. 91 સાથે સંપૂર્ણ 10 digit mobile number લખો."
+        )
 
 # ============================================================
 # FOOTER
