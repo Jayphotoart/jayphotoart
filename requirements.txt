@@ -12,4 +12,3 @@ razorpay
 requests
 pillow
 setuptools
-streamlit-downloader
