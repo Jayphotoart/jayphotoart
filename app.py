@@ -1477,7 +1477,7 @@ if st.session_state.get("admin_logged_in", False):
 
         phone = st.text_input(
             "📱 તમારો WhatsApp Number",
-            value="919173634111",
+            value="917043438175",
             key="whatsapp_phone",
             help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
         )
