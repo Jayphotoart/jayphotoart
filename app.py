@@ -1101,11 +1101,8 @@ if downloaded_photos:
         f"📸 {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે"
     )
 
-    # 1 photo free, બાકીના photo paid
-    PRICE_PER_PAID_PHOTO = 20
-
     photo_count = len(downloaded_photos)
-    total_price = max(0, photo_count - 1) * PRICE_PER_PAID_PHOTO
+    total_price = max(0, photo_count - 1) * PHOTO_PRICE
 
     # Event name સુરક્ષિત રીતે લો
     current_event_name = st.session_state.get(
