@@ -1029,15 +1029,69 @@ if is_ready_to_download:
         else:
             print(f"❌ Skipping {filename} - invalid or corrupt")
 
-    # ============================================================
-    # 2️⃣ દરેક ફોટા માટે Download Button
-    # ============================================================
-    if downloaded_photos:
-        st.sidebar.info(f"📸 {len(downloaded_photos)} ફોટા તૈયાર છે")
-        
-        for photo_number, (filename, photo_bytes) in enumerate(downloaded_photos, start=1):
-            # MIME type શોધો
+# ============================================================
+# 2️⃣ Select કરેલા બધા ફોટા Direct Download
+# ZIP નહીં બને — દરેક ફોટો અલગ file તરીકે download થશે
+# ============================================================
+
+from streamlit_downloader import downloader
+
+if downloaded_photos:
+    st.sidebar.success(
+        f"📸 {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે"
+    )
+
+    # 1 ફોટો Free, બાકીના Paid
+    PRICE_PER_PAID_PHOTO = 20
+    selected_photo_count = len(downloaded_photos)
+    total_price = max(0, selected_photo_count - 1) * PRICE_PER_PAID_PHOTO
+
+    if total_price == 0:
+        st.sidebar.success(
+            "🎁 1 ફોટો FREE છે. નીચે Download button દબાવો."
+        )
+    else:
+        st.sidebar.info(
+            f"🎁 1 ફોટો FREE | "
+            f"💳 Paid ફોટા: {selected_photo_count - 1} | "
+            f"કુલ રકમ: ₹{total_price}"
+        )
+
+    # User Download button દબાવે પછી session state flag set થશે
+    if st.sidebar.button(
+        f"⬇️ બધા {selected_photo_count} ફોટા Download કરો",
+        key="download_all_selected_photos_button",
+        width="stretch"
+    ):
+        st.session_state["start_multiple_photo_download"] = True
+
+        # WhatsApp notification URL બનાવો
+        admin_phone = st.session_state.get(
+            "whatsapp_phone",
+            "919173634111"
+        )
+
+        current_event_name = st.session_state.get(
+            "event_name",
+            event_name
+        )
+
+        save_whatsapp_notification(
+            event_name=current_event_name,
+            cart=cart,
+            total_price=total_price,
+            phone_number=admin_phone,
+        )
+
+    # Button click પછી દરેક selected photoને અલગ અલગ download trigger કરો
+    if st.session_state.get("start_multiple_photo_download", False):
+
+        for photo_index, (filename, photo_bytes) in enumerate(
+            downloaded_photos,
+            start=1
+        ):
             lower_name = filename.lower()
+
             if lower_name.endswith(".png"):
                 photo_mime = "image/png"
             elif lower_name.endswith(".webp"):
@@ -1046,67 +1100,34 @@ if is_ready_to_download:
                 photo_mime = "image/gif"
             else:
                 photo_mime = "image/jpeg"
-            
-            # ✅ Download Button (ફોટો યોગ્ય રીતે)
-            try:
-                st.sidebar.download_button(
-                    label=f"📥 ફોટો {photo_number} Download કરો",
-                    data=photo_bytes,
-                    file_name=filename,
-                    mime=photo_mime,
-                )
 
-                admin_phone = st.session_state.get("whatsapp_phone", "9176634111")
+            downloader(
+                data=photo_bytes,
+                filename=filename,
+                content_type=photo_mime,
+                key=f"direct_photo_download_{photo_index}_{filename}",
+            )
 
-                st.download_button(
-                        label="⬇️ ફોટા Download કરો",
-                        file_name="photos.zip",
-                        mime="application/zip",
-                        key="download_selected_photos",
-                        on_click=save_whatsapp_notification,
-                        args=(
-                            event_name,
-                            cart,
-                            total_price,
-                            admin_phone,
-                        ),
-                    )
-                
-                st.sidebar.caption(f"📷 {filename} ({len(photo_bytes)} bytes)")
-            except Exception as e:
-                st.sidebar.error(f"❌ Download error for {filename}: {str(e)[:50]}...")
-    else:
-        st.sidebar.error("❌ કોઈ યોગ્ય ફોટો મળ્યો નથી! ફોટા ફરીથી અપલોડ કરો.")
-        
-        # Debug માહિતી
-        with st.sidebar.expander("🔧 Debug Information", expanded=False):
-            st.write("Cart items:", len(cart))
-            for idx, item in enumerate(cart):
-                st.write(f"Item {idx+1}: {item.get('filename')}")
-                st.write(f"  Drive ID: {item.get('drive_file_id')}")
+        st.sidebar.success(
+            "✅ Download શરૂ થઈ ગયું છે. Browserમાં downloads allow કરો."
+        )
 
-        # હમણાં Debug રાખો, જો ZIP ન બને તો કારણ દેખાશે
-        with st.sidebar.expander("🔧 ZIP Debug માહિતી"):
-            st.write(f"કાર્ટમાં કુલ ફોટા: {len(cart)}")
-            st.write(f"ZIPમાં ઉમેરાયેલા ફોટા: {len(added_files)}")
-            st.write(f"ZIPમાં ન ઉમેરાયેલા ફોટા: {len(failed_files)}")
+        # Customerએ ફરી button દબાવી શકે તે માટે reset
+        st.session_state["start_multiple_photo_download"] = False
 
-            for idx, item in enumerate(cart):
-                filename = item.get("filename", "")
-                file_id = item.get("drive_file_id")
+    # Notification માટે WhatsApp link
+    whatsapp_url = st.session_state.get("whatsapp_url")
 
-                local_path = os.path.join(
-                    "events",
-                    event_name,
-                    "images",
-                    filename
-                )
+    if whatsapp_url:
+        st.sidebar.link_button(
+            "📱 WhatsApp ખોલો અને Send કરો",
+            whatsapp_url,
+            key="open_whatsapp_download_alert",
+            width="stretch"
+        )
 
-                st.write(f"ફોટો {idx + 1}: {filename}")
-                st.write(f"Drive File ID છે?: {bool(file_id)}")
-                st.write(
-                    f"Local Photo છે?: {os.path.exists(local_path)}"
-                )
+else:
+    st.sidebar.error("❌ કોઈ યોગ્ય ફોટો મળ્યો નથી.")
 # ------------------------------------------------
 # 📤 Share તમારા ફોટા
 # ------------------------------------------------
@@ -1477,7 +1498,7 @@ if st.session_state.get("admin_logged_in", False):
 
         phone = st.text_input(
             "📱 તમારો WhatsApp Number",
-            value="917043438175",
+            value="919173634111",
             key="whatsapp_phone",
             help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
         )
