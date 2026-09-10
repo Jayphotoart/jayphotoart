@@ -1470,43 +1470,36 @@ else:
 # ============================================================
 
 if st.session_state.get("admin_logged_in", False):
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("💬 WhatsApp Settings")
 
-    with st.sidebar.expander("⚙️ WhatsApp Set", expanded=False):
+    st.markdown("---")
+    st.subheader("💬 WhatsApp ટેસ્ટ")
 
-        phone = st.text_input(
-            "📱 તમારો WhatsApp Number",
-            value="919173634111",
-            key="whatsapp_phone",
-            help="Country code સાથે નંબર લખો. ઉદાહરણ: 919876543210"
-        )
+    phone = st.session_state.get(
+        "whatsapp_phone",
+        "919173634111"
+    )
 
-if st.button(
-    "📱 WhatsApp ટેસ્ટ કરો",
-    key="whatsapp_test_main_button",
-    width="stretch"
-):
-    phone = st.session_state.get("whatsapp_phone", "").strip()
+    if st.button(
+        "📱 WhatsApp ટેસ્ટ કરો",
+        key="admin_whatsapp_test_button",
+        width="stretch"
+    ):
+        success = test_whatsapp(phone)
 
-    success = test_whatsapp(phone)
+        if success:
+            st.success("✅ WhatsApp message તૈયાર છે.")
 
-    if success:
-        st.success("✅ WhatsApp message તૈયાર છે.")
+            test_url = st.session_state.get("test_whatsapp_url")
 
-        test_url = st.session_state.get("test_whatsapp_url")
-
-        if test_url:
-            st.link_button(
-                "📱 WhatsApp ખોલો",
-                test_url,
-                key="open_test_whatsapp_main_button",
-                width="stretch"
-            )
-    else:
-        st.error(
-            "❌ WhatsApp ફેઈલ થયું. 91 સાથે સંપૂર્ણ 10 digit mobile number લખો."
-        )
+            if test_url:
+                st.link_button(
+                    "📱 WhatsApp ખોલો",
+                    test_url,
+                    key="admin_open_test_whatsapp_button",
+                    width="stretch"
+                )
+        else:
+            st.error("❌ WhatsApp ફેઈલ થયું!")
 
 # ============================================================
 # FOOTER
