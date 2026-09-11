@@ -64,6 +64,27 @@ except Exception as e:
     st.error(f"Razorpay Setup માં ભૂલ છે: {e}")
     st.info("કૃપા કરીને .streamlit/secrets.toml માં razorpay_key_id અને razorpay_key_secret ચેક કરો.")
     st.stop()
+# ============================================================
+# URL Parameters ચેક કરો (Payment success પછી)
+# ============================================================
+
+query_params = st.query_params
+
+if "payment_id" in query_params and "status" in query_params:
+    payment_id = query_params.get("payment_id")
+    payment_status = query_params.get("status")
+    
+    if payment_status == "captured":
+        st.session_state.payment_done = True
+        st.session_state.payment_id = payment_id
+        st.session_state.payment_verified = True
+        
+        # Success message બતાવો
+        st.success("✅ Payment સફળ થઈ ગઈ છે!")
+        st.balloons()
+        
+        # Cart page પર redirect
+        st.switch_page("pages/cart.py")  # અથવા તમારો cart page
     
 
 
@@ -1008,13 +1029,23 @@ else:
                         "amount": amount_in_paise,
                         "currency": "INR",
                         "description": f"{len(cart)} Photos Download",
+                        "callback_url": "https://jayphotoart.in",  # તમારી app ની URL
+                        "callback_method": "get",
+                        "options": {
+                            "method": {
+                                "upi": True,
+                                "card": True,
+                                "netbanking": True,
+                                "wallet": True
+                            }
+                        }
                     }
 
                     res = razorpay_client.payment_link.create(link_data)
 
                     st.session_state.payment_link_id = res["id"]
                     st.session_state.payment_url = res["short_url"]
-                    st.session_state.telegram_sent = False
+                    st.session_state.whatsapp_sent = False
 
                     st.rerun()
 
@@ -1060,6 +1091,14 @@ else:
 
                 except Exception as e:
                     st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
+
+                    # Payment status ચેક કરો
+                    if st.session_state.get("payment_done"):
+                        st.success("✅ Payment થઈ ગઈ છે! હવે download કરો.")
+                        
+                        # Download buttons બતાવો
+                        # ZIP download button
+                        # Individual download buttons
 
     # --------------------------------------------------------
     # 9. Free અથવા Paid પછી Download
@@ -1288,7 +1327,7 @@ if st.session_state.get("admin_logged_in", False):
 # FOOTER
 # ============================================================
 st.markdown("""
-<div style="text-align: center; margin-top: 50px; color: #6c757d; font-size: 0.8rem;">
+<div style="text-align: center; margin-top: 50px; color: #6c757d; font-size: 0.8rem; font-bodarsize&color: white">
     📸 <strong>જય ફોટો શોધ</strong> - AI દ્વારા તમારા ફોટા શોધો<br>
     © 2026 Jay Photography | Made with ❤️ in Gujarat
 </div>
