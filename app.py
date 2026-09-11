@@ -904,36 +904,6 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
                                 st.rerun()
                         else:
                             st.warning("⚠️ આ ઇવેન્ટમાંથી તમારો મેળ ખાતો કોઈ ફોટો મળ્યો નથી.")
-# ============================================================
-# 💳 Checkout Button
-# ============================================================
-
-if st.session_state.cart:
-    total_amount = sum(item.get("price", 0) for item in st.session_state.cart)
-
-    if total_amount > 0:
-        st.sidebar.markdown("---")
-
-        if st.sidebar.button(
-            f"💳 Checkout - ₹{total_amount} ચૂકવો",
-            key="checkout_button",
-            width="stretch"
-        ):
-            # Checkout session start
-            st.session_state.checkout_initiated = True
-            st.session_state.checkout_amount = total_amount
-            st.session_state.checkout_event = event_name
-            st.session_state.checkout_items = st.session_state.cart.copy()
-
-            st.success("✅ Checkout શરૂ થઈ ગયો છે!")
-            st.info("📱 હવે Payment page ખુલશે...")
-
-            # Payment page પર redirect
-            st.rerun()
-
-        st.sidebar.info(
-            "💡 Payment પછી તમે બધા ફોટા Download કરી શકશો."
-        )
 
 # ============================================================
 # 🛒 CART DISPLAY & SECURE RAZORPAY PAYMENT (સાઇડબાર)
@@ -1093,56 +1063,45 @@ if is_ready_to_download:
             print(f"❌ Skipping {filename} - invalid or corrupt")
 
 # ============================================================
-# 2️⃣ પસંદ કરેલા દરેક ફોટા Original Qualityમાં Download
+# 🛒 કાર્ટ
 # ============================================================
 
-if downloaded_photos:
-    st.sidebar.success(
-        f"📸 {len(downloaded_photos)} ફોટા Download માટે તૈયાર છે"
-    )
+if st.session_state.cart:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🛒 તમારું કાર્ટ")
 
-    photo_count = len(downloaded_photos)
-    total_price = max(0, photo_count - 1) * PHOTO_PRICE
+    total_amount = 0
 
-    # Event name સુરક્ષિત રીતે લો
-    current_event_name = st.session_state.get(
-        "event_name",
-        "event"
-    )
+    for idx, item in enumerate(st.session_state.cart, start=1):
+        st.sidebar.markdown(f"**{idx}.** {item.get('filename')} - ₹{item.get('price', 0)}")
+        total_amount += item.get("price", 0)
 
-    # દરેક પસંદ કરેલા ફોટા માટે અલગ direct Download button
-    for photo_number, (filename, photo_bytes) in enumerate(
-        downloaded_photos,
-        start=1
-    ):
-        # Image પ્રમાણે MIME type
-        lower_name = filename.lower()
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"💰 **કુલ રકમ: ₹{total_amount}**")
 
-        if lower_name.endswith(".png"):
-            photo_mime = "image/png"
-        elif lower_name.endswith(".webp"):
-            photo_mime = "image/webp"
-        elif lower_name.endswith(".gif"):
-            photo_mime = "image/gif"
-        else:
-            photo_mime = "image/jpeg"
+    # ============================================================
+    # 💳 Checkout Button
+    # ============================================================
 
-        st.sidebar.download_button(
-            label=f"⬇️ ફોટો {photo_number} Download કરો",
-            data=photo_bytes,  # ✅ આ સૌથી જરૂરી line છે
-            file_name=filename,
-            mime=photo_mime,
-            key=f"customer_download_{photo_number}_{filename}",
-            width="stretch",
+    if total_amount > 0:
+        if st.sidebar.button(
+            f"💳 Checkout - ₹{total_amount} ચૂકવો",
+            key="checkout_button",
+            width="stretch"
+        ):
+            st.session_state.checkout_initiated = True
+            st.session_state.checkout_amount = total_amount
+            st.session_state.checkout_event = event_name
+            st.session_state.checkout_items = st.session_state.cart.copy()
+
+            st.success("✅ Checkout શરૂ થઈ ગયો છે!")
+            st.rerun()
+
+        st.sidebar.info(
+            "💡 Payment પછી તમે બધા ફોટા Download કરી શકશો."
         )
-
-        st.sidebar.caption(
-            f"📷 {filename} | "
-            f"{len(photo_bytes) / (1024 * 1024):.2f} MB"
-        )
-
 else:
-    st.sidebar.error("❌ Download માટે કોઈ ફોટા મળ્યા નથી.")
+    st.sidebar.error("❌ કાર્ટ ખાલી છે.")
 # ------------------------------------------------
 # 📤 Share તમારા ફોટા
 # ------------------------------------------------
