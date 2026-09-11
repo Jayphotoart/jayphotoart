@@ -69,7 +69,10 @@ except Exception as e:
 # ============================================================
 
 query_params = st.query_params
+event_name_from_url = query_params.get("event", "")
+page_from_url = query_params.get("page", "")
 
+# Payment success પછી
 if "payment_id" in query_params and "status" in query_params:
     payment_id = query_params.get("payment_id")
     payment_status = query_params.get("status")
@@ -763,6 +766,38 @@ elif option == "📱 QR કોડ બનાવો":
                 st.write("1. આ QR કોડ પ્રિન્ટ કરીને ઇવેન્ટમાં મૂકો.")
                 st.write("2. ગ્રાહકો સ્કેન કરશે એટલે સીધા ગ્રાહક પેજ પર જશે.")
                 st.write(f"3. લિંક: {url}")
+    # ============================================================
+    # URL Parameters ચેક કરો
+    # ============================================================
+
+    query_params = st.query_params
+    event_name_from_url = query_params.get("event", "")
+    page_from_url = query_params.get("page", "")
+
+    # Payment success પછી
+    if "payment_id" in query_params and "status" in query_params:
+        payment_id = query_params.get("payment_id")
+        payment_status = query_params.get("status")
+        
+        if payment_status == "captured":
+            st.session_state.payment_done = True
+            st.session_state.payment_id = payment_id
+            st.session_state.payment_verified = True
+            st.success("✅ Payment સફળ થઈ ગઈ છે!")
+            st.balloons()
+
+    # Page selection - payment success પછી cart page પર લઈ જશે
+    if page_from_url == "cart":
+        option = "🛒 કાર્ટ"
+    elif event_name_from_url:
+        option = "🔍 ફોટો શોધો"
+        event_name = urllib.parse.unquote(str(event_name_from_url)).strip()
+    else:
+        option = st.sidebar.selectbox(
+            "પેજ પસંદ કરો",
+            ["🏠 હોમ", "🔍 ફોટો શોધો", "🛒 કાર્ટ", "👤 Admin"],
+            key="page_selector"
+        )                
 
 # ============================================================
 # PAGE 3: CLIENT SEARCH (ગ્રાહક માટેનું મુખ્ય પેજ)
@@ -1011,6 +1046,9 @@ else:
     if total_price > 0 and not st.session_state.payment_done:
         st.sidebar.markdown("---")
         st.sidebar.markdown("### 💳 પેમેન્ટ કરો")
+        # Cart સેવ કરો
+        st.session_state.saved_cart = st.session_state.cart.copy()
+        st.session_state.saved_event = event_name
 
         # Payment link બનાવો
         if st.session_state.payment_link_id is None:
@@ -1018,20 +1056,25 @@ else:
                 f"🧾 ચેકઆઉટ કરો (₹{total_price})",
                 key="checkout_btn"
             ):
+                # Cart સેવ કરો (payment પછી restore કરવા)
+                st.session_state.saved_cart = st.session_state.cart.copy()
+                st.session_state.saved_event = event_name
+                st.session_state.saved_total = total_price
+                
                 try:
                     amount_in_paise = int(total_price * 100)
                     
                     # Event name URL-safe બનાવો
                     encoded_event_name = urllib.parse.quote(str(event_name))
                     
-                    # Callback URL બનાવો - payment success પછી અહીં આવશે
-                    callback_url = f"https://jayphotoart.streamlit.app/?event={encoded_event_name}"
+                    # Callback URL - cart page પર લઈ જશે
+                    callback_url = f"https://jayphotoart.streamlit.app/?event={encoded_event_name}&page=cart"
 
                     link_data = {
                         "amount": amount_in_paise,
                         "currency": "INR",
                         "description": f"{len(cart)} Photos Download",
-                        "callback_url": callback_url,  # ← સાચી URL
+                        "callback_url": callback_url,
                         "callback_method": "get",
                         "options": {
                             "method": {
