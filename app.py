@@ -11,92 +11,174 @@ import shutil
 import io
 import zipfile
 import hashlib
-import datetime
 import tempfile
 import requests
 import urllib.parse
+import uuid                          
+import sqlite3                      
+from io import BytesIO              
+from datetime import datetime
 from PIL import Image
 from insightface.app import FaceAnalysis
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
-# ==========================================
-# 🔐 LOAD CONFIGURATION & SECRETS SAFELY
-# ==========================================
-
-try:
-    # 1. Admin Password
-    ADMIN_PASSWORD = st.secrets["admin_password"]
-
-    # 2. OAuth Details (Dictionary)
-    OAUTH_CONFIG = st.secrets["oauth"]
-    OAUTH_CLIENT_ID = OAUTH_CONFIG["client_id"]
-    OAUTH_CLIENT_SECRET = OAUTH_CONFIG["client_secret"]
-
-    # 3. GCP Service Account (Credentials Dict)
-    # GCP લાઈબ્રેરી dict સ્વીકારે છે, તેથી તેને dict ફોર્મેટમાં લોડ કર્યું છે
-    GCP_CREDENTIALS_DICT = dict(st.secrets["gcp_service_account"])
-
-    # 5. Razorpay Test Credentials
-    RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
-    RAZORPAY_KEY_SECRET = st.secrets.get("razorpay_key_secret", "")
-    
-except KeyError as e:
-    st.error(f"⚠️ Secrets.toml માં કી ખૂટે છે: {e}")
-    st.info("કૃપા કરીને .streamlit/secrets.toml ફાઈલ યોગ્ય રીતે સેટ કરો.")
-    st.stop()
-#===========================================================
-import streamlit as st
 import razorpay
 
 # ==========================================
-# 🔐 RAZORPAY CLIENT INITIALIZATION
+# 🔐 LOAD CONFIGURATION & SECRETS
 # ==========================================
 try:
+    ADMIN_PASSWORD = st.secrets["admin_password"]
+    OAUTH_CONFIG = st.secrets["oauth"]
+    OAUTH_CLIENT_ID = OAUTH_CONFIG["client_id"]
+    OAUTH_CLIENT_SECRET = OAUTH_CONFIG["client_secret"]
+    GCP_CREDENTIALS_DICT = dict(st.secrets["gcp_service_account"])
     RAZORPAY_KEY_ID = st.secrets["razorpay_key_id"]
     RAZORPAY_KEY_SECRET = st.secrets["razorpay_key_secret"]
-    
-    # અહીં razorpay_client વ્યાખ્યાયિત થાય છે
+except KeyError as e:
+    st.error(f"⚠️ Secrets.toml માં કી ખૂટે છે: {e}")
+    st.stop()
+
+# Razorpay Client
+try:
     razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 except Exception as e:
-    st.error(f"Razorpay Setup માં ભૂલ છે: {e}")
-    st.info("કૃપા કરીને .streamlit/secrets.toml માં razorpay_key_id અને razorpay_key_secret ચેક કરો.")
+    st.error(f"Razorpay Setup માં ભૂલ: {e}")
     st.stop()
-# ============================================================
-# URL Parameters ચેક કરો (Payment success પછી)
-# ============================================================
 
+# ============================================================
+# 🗄️ DATABASE SETUP (નવું — Orders સેવ કરવા માટે)
+# ============================================================
+DB_PATH = "orders.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            order_id TEXT PRIMARY KEY,
+            event_name TEXT,
+            photo_ids TEXT,
+            amount REAL,
+            status TEXT,
+            payment_link_id TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def save_order(order_id, event_name, photo_ids, amount, status, payment_link_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT OR REPLACE INTO orders
+        (order_id, event_name, photo_ids, amount, status, payment_link_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        order_id, event_name,
+        json.dumps(photo_ids),
+        amount, status, payment_link_id,
+        datetime.now().isoformat()
+    ))
+    conn.commit()
+    conn.close()
+
+def get_order(order_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT * FROM orders WHERE order_id = ?", (order_id,))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return {
+            "order_id": row[0],
+            "event_name": row[1],
+            "photo_ids": json.loads(row[2]),
+            "amount": row[3],
+            "status": row[4],
+            "payment_link_id": row[5],
+            "created_at": row[6]
+        }
+    return None
+
+def update_order_status(order_id, status):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE orders SET status = ? WHERE order_id = ?", (status, order_id))
+    conn.commit()
+    conn.close()
+
+# ============================================================
+# 🌐 URL PARAMS (એક જ વાર વાંચો!)
+# ============================================================
 query_params = st.query_params
 event_name_from_url = query_params.get("event", "")
 page_from_url = query_params.get("page", "")
+order_id_from_url = query_params.get("order_id", "")
+payment_status_from_url = query_params.get("status", "")
 
-# Payment success પછી
-if "payment_id" in query_params and "status" in query_params:
-    payment_id = query_params.get("payment_id")
-    payment_status = query_params.get("status")
-    
-    if payment_status == "captured":
-        st.session_state.payment_done = True
-        st.session_state.payment_id = payment_id
-        st.session_state.payment_verified = True
-        st.success("✅ Payment સફળ થઈ ગઈ છે!")
-        st.balloons()
 # ============================================================
-# 2️⃣ SESSION STATE INIT
+# SESSION STATE INIT
 # ============================================================
-if "pending_faces" not in st.session_state:
-    st.session_state.pending_faces = []
-if "cart" not in st.session_state:
-    st.session_state.cart = []
-if "payment_done" not in st.session_state:
-    st.session_state.payment_done = False
-if "admin_logged_in" not in st.session_state:
-    st.session_state.admin_logged_in = False
-if "show_checkout" not in st.session_state:
-    st.session_state.show_checkout = False
+defaults = {
+    "pending_faces": [],
+    "cart": [],
+    "payment_done": False,
+    "admin_logged_in": False,
+    "show_checkout": False,
+    "payment_link_id": None,
+    "payment_url": None,
+    "payment_id": None,
+    "payment_verified": False,
+    "order_id": None,
+    "saved_cart": [],
+    "saved_event": None,
+    "saved_total": 0,
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
+# ============================================================
+# 🎯 ORDER RESTORE FROM URL (payment પછી સૌથી પહેલાં!)
+# ============================================================
+if order_id_from_url and not st.session_state.get("payment_done"):
+    order = get_order(order_id_from_url)
+    if order:
+        # Cart restore કરો
+        st.session_state.cart = order["photo_ids"]
+        st.session_state.saved_cart = order["photo_ids"]
+        st.session_state.saved_event = order["event_name"]
+        st.session_state.saved_total = order["amount"]
+        st.session_state.order_id = order_id_from_url
+        st.session_state.payment_link_id = order["payment_link_id"]
+
+        # Auto verify Razorpay
+        try:
+            link = razorpay_client.payment_link.fetch(order["payment_link_id"])
+            if link.get("status") == "paid":
+                update_order_status(order_id_from_url, "paid")
+                st.session_state.payment_done = True
+                st.session_state.payment_verified = True
+                st.success("✅ પેમેન્ટ સફળ! તમારા ફોટા નીચે તૈયાર છે.")
+                st.balloons()
+        except Exception as e:
+            st.warning(f"Payment verify fail: {e}")
+
+# Razorpay callback URL params (alternative flow)
+if "payment_id" in query_params and payment_status_from_url == "captured":
+    st.session_state.payment_done = True
+    st.session_state.payment_id = query_params.get("payment_id")
+    st.session_state.payment_verified = True
+
+# ============================================================
+# CONSTANTS
+# ============================================================
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"
 PHOTO_PRICE = 10
@@ -316,8 +398,13 @@ def save_event_data_to_drive(event_name, data, folder_id):
 # 5️⃣ EVENT DATA SYNC FUNCTIONS
 # ============================================================
 def get_event_dir(event_name):
+    # unsafe characters દૂર કરો
+    safe_name = "".join(c for c in str(event_name) if c.isalnum() or c in "_- ")
+    safe_name = safe_name.strip().replace(" ", "_")
+    if not safe_name:
+        safe_name = "default_event"
     base = "events"
-    event_path = os.path.join(base, event_name)
+    event_path = os.path.join(base, safe_name)
     photos_path = os.path.join(event_path, "images")
     os.makedirs(photos_path, exist_ok=True)
     return event_path, photos_path
@@ -446,24 +533,23 @@ with col2:
 # ============================================================
 # 8️⃣ SMART NAVIGATION (ગ્રાહક અને એડમિન માટે અલગ રસ્તા)
 # ============================================================
-query_params = st.query_params
-event_name_from_url = query_params.get("event")
-st.write("EVENT FROM URL:", event_name_from_url)
-
-
-# જો QR સ્કેન દ્વારા ગ્રાહક આવે તો ફક્ત કસ્ટમર વ્યૂ બતાવો
 if event_name_from_url:
     is_client_mode = True
 else:
     is_client_mode = False
 
-# સાઇડબાર મેનૂ
-if is_client_mode:
+if is_client_mode or page_from_url == "cart":
     option = "🔍 ફોટો શોધો"
-    st.sidebar.info("📱 ગ્રાહક ફોટો શોધ મોડ")
+    if page_from_url == "cart":
+        st.sidebar.info("💳 પેમેન્ટ પેજ")
+    else:
+        st.sidebar.info("📱 ગ્રાહક ફોટો શોધ મોડ")
 else:
     if st.session_state.admin_logged_in:
-        option = st.sidebar.selectbox("📌 એડમિન મેનૂ", ["📂 ઇવેન્ટ મેનેજ", "📱 QR કોડ બનાવો", "🔍 ફોટો શોધો ટેસ્ટિંગ"])
+        option = st.sidebar.selectbox(
+            "📌 એડમિન મેનૂ",
+            ["📂 ઇવેન્ટ મેનેજ", "📱 QR કોડ બનાવો", "🔍 ફોટો શોધો ટેસ્ટિંગ"]
+        )
         if st.sidebar.button("🚪 એડમિન લૉગઆઉટ"):
             st.session_state.admin_logged_in = False
             st.rerun()
@@ -963,6 +1049,8 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
+# Event name fallback
+event_name = locals().get("event_name", None) or st.session_state.get("saved_event", "event")
 
 # ------------------------------------------------------------
 # 1. Session State શરૂ કરો
@@ -1044,103 +1132,112 @@ else:
         st.session_state.payment_verified = False
         st.rerun()
 
-    # --------------------------------------------------------
-    # 7. Razorpay Payment Link બનાવો (ફક્ત paid photos માટે)
-    # --------------------------------------------------------
-    if total_price > 0 and not st.session_state.payment_done:
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 💳 પેમેન્ટ કરો")
-        # Cart સેવ કરો
-        st.session_state.saved_cart = st.session_state.cart.copy()
-        st.session_state.saved_event = event_name
+# --------------------------------------------------------
+# 7. Razorpay Payment Link બનાવો
+# --------------------------------------------------------
+if total_price > 0 and not st.session_state.payment_done:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 💳 પેમેન્ટ કરો")
 
-        # Payment link બનાવો
-        if st.session_state.payment_link_id is None:
-            if st.sidebar.button(
-                f"🧾 ચેકઆઉટ કરો (₹{total_price})",
-                key="checkout_btn"
-            ):
-                # Cart સેવ કરો (payment પછી restore કરવા)
-                st.session_state.saved_cart = st.session_state.cart.copy()
-                st.session_state.saved_event = event_name
-                st.session_state.saved_total = total_price
-                
-                try:
-                    amount_in_paise = int(total_price * 100)
-                    
-                    # Event name URL-safe બનાવો
-                    encoded_event_name = urllib.parse.quote(str(event_name))
-                    
-                    # Callback URL - cart page પર લઈ જશે
-                    callback_url = f"https://jayphotoart.streamlit.app/?event={encoded_event_name}&page=cart"
+    if st.session_state.payment_link_id is None:
+        if st.sidebar.button(f"🧾 ચેકઆઉટ કરો (₹{total_price})", key="checkout_btn"):
 
-                    link_data = {
-                        "amount": amount_in_paise,
-                        "currency": "INR",
-                        "description": f"{len(cart)} Photos Download",
-                        "callback_url": callback_url,
-                        "callback_method": "get",
-                        "options": {
-                            "method": {
-                                "upi": True,
-                                "card": True,
-                                "netbanking": True,
-                                "wallet": True
-                            }
-                        }
+            # ✅ 1. Cart સેવ કરો
+            st.session_state.saved_cart = st.session_state.cart.copy()
+            st.session_state.saved_event = event_name
+            st.session_state.saved_total = total_price
+
+            # ✅ 2. Unique Order ID
+            order_id = f"ORD_{uuid.uuid4().hex[:10].upper()}"
+
+            # ✅ 3. Photo IDs list (cart list છે, તેથી filenames લો)
+            photo_ids_list = [
+                item.get("filename", f"photo_{i}")
+                for i, item in enumerate(st.session_state.cart)
+            ]
+
+            try:
+                amount_in_paise = int(total_price * 100)
+                encoded_event_name = urllib.parse.quote(str(event_name))
+
+                # ✅ 4. Callback URL
+                callback_url = (
+                    f"https://jayphotoart.streamlit.app/"
+                    f"?event={encoded_event_name}&page=cart&order_id={order_id}"
+                )
+
+                link_data = {
+                    "amount": amount_in_paise,
+                    "currency": "INR",
+                    "description": f"{len(photo_ids_list)} Photos Download",
+                    "callback_url": callback_url,
+                    "callback_method": "get",
+                    "notes": {
+                        "order_id": order_id,
+                        "event_name": str(event_name)
+                    },
+                    "options": {
+                        "method": {"upi": True, "card": True,
+                                   "netbanking": True, "wallet": True}
                     }
+                }
 
-                    res = razorpay_client.payment_link.create(link_data)
+                res = razorpay_client.payment_link.create(link_data)
 
-                    st.session_state.payment_link_id = res["id"]
-                    st.session_state.payment_url = res["short_url"]
+                # ✅ 5. ડેટાબેઝમાં order સેવ કરો
+                save_order(
+                    order_id=order_id,
+                    event_name=str(event_name),
+                    photo_ids=photo_ids_list,
+                    amount=total_price,
+                    status="pending",
+                    payment_link_id=res["id"]
+                )
 
+                # ✅ 6. Session state
+                st.session_state.order_id = order_id
+                st.session_state.payment_link_id = res["id"]
+                st.session_state.payment_url = res["short_url"]
+
+                st.rerun()
+
+            except Exception as e:
+                st.sidebar.error(f"❌ પેમેન્ટ લિંક બનાવવામાં ભૂલ: {e}")
+
+    # Payment Link બતાવો
+    if st.session_state.payment_link_id:
+        st.sidebar.link_button(
+            "💳 પેમેન્ટ કરો (Pay Now)",
+            st.session_state.payment_url,
+            type="primary",
+            use_container_width=True
+        )
+        st.sidebar.caption("પહેલાં Pay Now દબાવીને Razorpay/UPIમાં પેમેન્ટ કરો.")
+        st.sidebar.caption("પેમેન્ટ પછી નીચે Verify બટન દબાવો.")
+
+        # ✅ 8. Verify Button
+        if st.sidebar.button("🔄 મેં પેમેન્ટ કરી દીધું (Verify)", key="verify_pay_btn"):
+            try:
+                status_res = razorpay_client.payment_link.fetch(
+                    st.session_state.payment_link_id
+                )
+                if status_res.get("status") == "paid":
+                    # DB માં status paid કરો
+                    if st.session_state.order_id:
+                        update_order_status(st.session_state.order_id, "paid")
+
+                    st.session_state.payment_done = True
+                    st.session_state.payment_verified = True
+                    st.sidebar.success("✅ પેમેન્ટ સફળ થયું!")
+                    st.balloons()
                     st.rerun()
-
-                except Exception as e:
-                    st.sidebar.error(f"❌ પેમેન્ટ લિંક બનાવવામાં ભૂલ: {e}")
-
-        # Payment link બતાવો
-        if st.session_state.payment_link_id:
-            st.sidebar.link_button(
-                label="💳 પેમેન્ટ કરો (Pay Now)",
-                url=st.session_state.payment_url,
-                type="primary",
-                width="stretch"
-            )
-
-            st.sidebar.caption("પહેલાં Pay Now દબાવીને Razorpay/UPIમાં પેમેન્ટ કરો.")
-            st.sidebar.caption("પેમેન્ટ પછી નીચે Verify બટન દબાવો.")
-
-            # ------------------------------------------------
-            # 8. Razorpay Payment Verify
-            # ------------------------------------------------
-            if st.sidebar.button(
-                "🔄 મેં પેમેન્ટ કરી દીધું (Verify)",
-                key="verify_pay_btn"
-            ):
-                try:
-                    status_res = razorpay_client.payment_link.fetch(
-                        st.session_state.payment_link_id
+                else:
+                    st.sidebar.warning(
+                        "⚠️ પેમેન્ટ હજુ મળ્યું નથી. "
+                        "Razorpayમાં પેમેન્ટ પૂર્ણ કરીને ફરી Verify દબાવો."
                     )
-
-                    payment_status = status_res.get("status", "")
-
-                    if payment_status == "paid":
-                        st.session_state.payment_done = True
-                        st.session_state.payment_verified = True
-                        st.sidebar.success("✅ પેમેન્ટ સફળ થયું!")
-                        st.balloons()
-                        st.rerun()
-
-                    else:
-                        st.sidebar.warning(
-                            "⚠️ પેમેન્ટ હજુ મળ્યું નથી. "
-                            "Razorpayમાં પેમેન્ટ પૂર્ણ કરીને ફરી Verify દબાવો."
-                        )
-
-                except Exception as e:
-                    st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
+            except Exception as e:
+                st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
 
     # --------------------------------------------------------
     # 9. Free અથવા Paid પછી Download
