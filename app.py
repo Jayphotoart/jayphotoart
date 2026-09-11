@@ -78,16 +78,8 @@ if "payment_id" in query_params and "status" in query_params:
         st.session_state.payment_done = True
         st.session_state.payment_id = payment_id
         st.session_state.payment_verified = True
-        
-        # Success message બતાવો
         st.success("✅ Payment સફળ થઈ ગઈ છે!")
         st.balloons()
-        
-        # Cart page પર redirect
-        st.switch_page("pages/cart.py")  # અથવા તમારો cart page
-    
-
-
 # ============================================================
 # 2️⃣ SESSION STATE INIT
 # ============================================================
@@ -948,8 +940,11 @@ if "payment_link_id" not in st.session_state:
 if "payment_url" not in st.session_state:
     st.session_state.payment_url = None
 
-if "telegram_sent" not in st.session_state:
-    st.session_state.telegram_sent = False
+if "payment_id" not in st.session_state:
+    st.session_state.payment_id = None
+
+if "payment_verified" not in st.session_state:
+    st.session_state.payment_verified = False
 
 # ------------------------------------------------------------
 # 2. Cart અને Total Price બનાવો
@@ -1006,7 +1001,8 @@ else:
         st.session_state.payment_done = False
         st.session_state.payment_link_id = None
         st.session_state.payment_url = None
-        st.session_state.telegram_sent = False
+        st.session_state.payment_id = None
+        st.session_state.payment_verified = False
         st.rerun()
 
     # --------------------------------------------------------
@@ -1024,12 +1020,18 @@ else:
             ):
                 try:
                     amount_in_paise = int(total_price * 100)
+                    
+                    # Event name URL-safe બનાવો
+                    encoded_event_name = urllib.parse.quote(str(event_name))
+                    
+                    # Callback URL બનાવો - payment success પછી અહીં આવશે
+                    callback_url = f"https://jayphotoart.streamlit.app/?event={encoded_event_name}"
 
                     link_data = {
                         "amount": amount_in_paise,
                         "currency": "INR",
                         "description": f"{len(cart)} Photos Download",
-                        "callback_url": "https://jayphotoart.in",  # તમારી app ની URL
+                        "callback_url": callback_url,  # ← સાચી URL
                         "callback_method": "get",
                         "options": {
                             "method": {
@@ -1045,7 +1047,6 @@ else:
 
                     st.session_state.payment_link_id = res["id"]
                     st.session_state.payment_url = res["short_url"]
-                    st.session_state.whatsapp_sent = False
 
                     st.rerun()
 
@@ -1080,7 +1081,9 @@ else:
 
                     if payment_status == "paid":
                         st.session_state.payment_done = True
+                        st.session_state.payment_verified = True
                         st.sidebar.success("✅ પેમેન્ટ સફળ થયું!")
+                        st.balloons()
                         st.rerun()
 
                     else:
@@ -1091,14 +1094,6 @@ else:
 
                 except Exception as e:
                     st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
-
-                    # Payment status ચેક કરો
-                    if st.session_state.get("payment_done"):
-                        st.success("✅ Payment થઈ ગઈ છે! હવે download કરો.")
-                        
-                        # Download buttons બતાવો
-                        # ZIP download button
-                        # Individual download buttons
 
     # --------------------------------------------------------
     # 9. Free અથવા Paid પછી Download
@@ -1112,7 +1107,7 @@ else:
         st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
         st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
 
-        # ZIP memoryમાં બનાવો
+        # ZIP download button
         zip_buffer = io.BytesIO()
         has_files = False
 
@@ -1127,7 +1122,7 @@ else:
                 filename = item.get("filename", f"photo_{idx + 1}.jpg")
                 file_bytes = None
 
-                # પહેલું: Google Driveથી ફોટો લો
+                # Google Driveથી ફોટો લો
                 if file_id:
                     try:
                         drive_download_url = (
@@ -1146,7 +1141,7 @@ else:
                     except Exception as e:
                         print(f"Google Drive download error: {e}")
 
-                # બીજું: Local events folderમાં હોય તો લો
+                # Local folderમાંથી ફોટો લો
                 if not file_bytes:
                     local_path = os.path.join(
                         "events",
@@ -1162,14 +1157,14 @@ else:
                         except Exception as e:
                             print(f"Local photo read error: {e}")
 
-                # મળેલો photo ZIPમાં ઉમેરો
+                # ZIPમાં ઉમેરો
                 if file_bytes:
                     zip_file.writestr(filename, file_bytes)
                     has_files = True
 
         zip_buffer.seek(0)
 
-        # ZIP Download button
+        # Download button
         if has_files:
             st.sidebar.download_button(
                 label=f"📥 બધા {len(cart)} ફોટા Download કરો (ZIP)",
