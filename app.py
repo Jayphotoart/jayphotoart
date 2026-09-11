@@ -912,7 +912,6 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🛒 તમારું કાર્ટ")
 
-
 # ------------------------------------------------------------
 # 1. Session State શરૂ કરો
 # ------------------------------------------------------------
@@ -931,7 +930,6 @@ if "payment_url" not in st.session_state:
 if "telegram_sent" not in st.session_state:
     st.session_state.telegram_sent = False
 
-
 # ------------------------------------------------------------
 # 2. Cart અને Total Price બનાવો
 # ------------------------------------------------------------
@@ -942,13 +940,11 @@ total_price = sum(
     for item in cart
 )
 
-
 # ------------------------------------------------------------
 # 3. Cart ખાલી હોય તો
 # ------------------------------------------------------------
 if not cart:
     st.sidebar.info("🛒 કાર્ટ ખાલી છે")
-
 
 # ------------------------------------------------------------
 # 4. Cartમાં Photos હોય તો
@@ -972,7 +968,6 @@ else:
         if filename:
             st.sidebar.caption(f"📷 {filename}")
 
-
     # --------------------------------------------------------
     # 5. કુલ રકમ
     # --------------------------------------------------------
@@ -993,195 +988,8 @@ else:
         st.session_state.telegram_sent = False
         st.rerun()
 
-
-# ============================================================
-# 📥 DOWNLOAD SECTION - ફોટો યોગ્ય રીતે લોડ કરો
-# ============================================================
-is_ready_to_download = (total_price == 0 or st.session_state.payment_done)
-
-if is_ready_to_download:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
-    st.sidebar.success("🎉 તમારા ફોટા Download માટે તૈયાર છે!")
-
-    # ============================================================
-    # 1️⃣ બધા ફોટા એકત્ર કરો (યોગ્ય રીતે)
-    # ============================================================
-    downloaded_photos = []
-    added_files = []
-    failed_files = []
-    
-    for idx, item in enumerate(cart):
-        filename = item.get("filename", f"photo_{idx + 1}.jpg")
-        file_id = item.get("drive_file_id")
-        file_bytes = None
-        
-        # Google Drive માંથી ફોટો લો
-        if file_id:
-            try:
-                drive_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                response = requests.get(drive_url, timeout=30)
-                
-                # ચેક કરો કે ફોટો યોગ્ય છે કે નહીં
-                if response.status_code == 200:
-                    content_type = response.headers.get('Content-Type', '')
-                    
-                    # ફક્ત ફોટો જ લો (HTML નહીં)
-                    if 'image' in content_type and len(response.content) > 1000:
-                        file_bytes = response.content
-                    else:
-                        print(f"⚠️ {filename} is not a valid image from Drive")
-                else:
-                    print(f"❌ Drive download failed for {filename}: {response.status_code}")
-            except Exception as e:
-                print(f"❌ Drive error for {filename}: {e}")
-                file_bytes = None
-        
-        # Local folder માંથી ફોટો લો (જો Drive માંથી ન મળે)
-        if not file_bytes:
-            local_path = os.path.join("events", event_name, "images", filename)
-            if os.path.exists(local_path):
-                try:
-                    with open(local_path, "rb") as f:
-                        file_bytes = f.read()
-                    
-                    # ચેક કરો કે ફોટો યોગ્ય છે
-                    if len(file_bytes) < 1000:
-                        file_bytes = None
-                        print(f"⚠️ {filename} is too small (probably corrupt)")
-                except Exception as e:
-                    print(f"❌ Local file error for {filename}: {e}")
-                    file_bytes = None
-            else:
-                print(f"❌ Local file not found: {local_path}")
-        
-        # જો ફોટો મળે અને યોગ્ય હોય તો લિસ્ટમાં ઉમેરો
-        if file_bytes and isinstance(file_bytes, bytes) and len(file_bytes) > 1000:
-            downloaded_photos.append((filename, file_bytes))
-            print(f"✅ Added {filename} ({len(file_bytes)} bytes)")
-        else:
-            print(f"❌ Skipping {filename} - invalid or corrupt")
-
-# ============================================================
-# 🛒 કાર્ટ
-# ============================================================
-
-if st.session_state.cart:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🛒 તમારું કાર્ટ")
-
-    total_amount = 0
-
-    for idx, item in enumerate(st.session_state.cart, start=1):
-        st.sidebar.markdown(f"**{idx}.** {item.get('filename')} - ₹{item.get('price', 0)}")
-        total_amount += item.get("price", 0)
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"💰 **કુલ રકમ: ₹{total_amount}**")
-
-    # ============================================================
-    # 💳 Checkout Button
-    # ============================================================
-
-    if total_amount > 0:
-        if st.sidebar.button(
-            f"💳 Checkout - ₹{total_amount} ચૂકવો",
-            key="checkout_button",
-            width="stretch"
-        ):
-            st.session_state.checkout_initiated = True
-            st.session_state.checkout_amount = total_amount
-            st.session_state.checkout_event = event_name
-            st.session_state.checkout_items = st.session_state.cart.copy()
-
-            st.success("✅ Checkout શરૂ થઈ ગયો છે!")
-            st.rerun()
-
-        st.sidebar.info(
-            "💡 Payment પછી તમે બધા ફોટા Download કરી શકશો."
-        )
-else:
-    st.sidebar.error("❌ કાર્ટ ખાલી છે.")
-# ------------------------------------------------
-# 📤 Share તમારા ફોટા
-# ------------------------------------------------
-st.sidebar.markdown("---")
-st.sidebar.markdown("## 📤 તમારા ફોટા શેર કરો")
-
-# પસંદ કરેલા eventનું નામ મેળવો
-# "selected_event" ને તમારા projectમાં selectbox વેરિએબલનું સાચું નામ હોય તો જ વાપરો.
-event_name = st.session_state.get("event_name", "")
-
-# જો session_stateમાં event_name સેટ ન હોય તો નીચેનું fallback ઉપયોગી થઈ શકે.
-# તમારા selectboxમાં selected_event નામનું variable હોય તો uncomment કરો:
-# event_name = st.session_state.get("event_name", selected_event)
-
-if not event_name:
-    st.sidebar.info("📌 ફોટા શેર કરવા માટે પહેલા Event પસંદ કરો.")
-else:
-    # Event name URLમાં સુરક્ષિત રીતે મૂકવા માટે encode કરો
-    encoded_event_name = urllib.parse.quote(str(event_name))
-
-    app_url = (
-        "https://jayphotoart.in/?event="
-        f"{encoded_event_name}"
-    )
-
-    share_text = (
-        f"🌟 {event_name} ઇવેન્ટના સુંદર ફોટા જુઓ!\n\n"
-        f"📸 Jay Photo Art દ્વારા ફોટા શોધો:\n"
-        f"{app_url}"
-    )
-
-    # WhatsApp માટે તૈયાર message અને link
-    whatsapp_url = (
-        "https://api.whatsapp.com/send?text="
-        f"{urllib.parse.quote(share_text)}"
-    )
-
-    # Facebook માટે event page share URL
-    facebook_url = (
-        "https://www.facebook.com/sharer/sharer.php?u="
-        f"{urllib.parse.quote(app_url, safe='')}"
-    )
-
-    # ત્રણ columnsમાં Share buttons
-    share_col1, share_col2, share_col3 = st.sidebar.columns(3)
-
-    with share_col1:
-        st.link_button(
-            "🟢 WhatsApp",
-            whatsapp_url,
-            width="stretch"
-        )
-
-    with share_col2:
-        st.link_button(
-            "🔵 Facebook",
-            facebook_url,
-            width="stretch"
-        )
-
-    with share_col3:
-        if st.button(
-            "🟣 Instagram",
-            key="instagram_share_btn",
-            width="stretch"
-        ):
-            st.sidebar.info(
-                "📋 નીચેની લિંક Copy કરીને Instagram "
-                "Story, Post અથવા Bioમાં Paste કરો."
-            )
-            st.sidebar.code(app_url)
-
-    if st.sidebar.button(
-        "🔗 ઇવેન્ટ લિંક બતાવો",
-        key="show_event_link_btn",
-        width="stretch"
-    ):
-        st.sidebar.code(app_url)
     # --------------------------------------------------------
-    # 3. Razorpay Payment Link બનાવો
+    # 7. Razorpay Payment Link બનાવો (ફક્ત paid photos માટે)
     # --------------------------------------------------------
     if total_price > 0 and not st.session_state.payment_done:
         st.sidebar.markdown("---")
@@ -1213,7 +1021,6 @@ else:
                 except Exception as e:
                     st.sidebar.error(f"❌ પેમેન્ટ લિંક બનાવવામાં ભૂલ: {e}")
 
-
         # Payment link બતાવો
         if st.session_state.payment_link_id:
             st.sidebar.link_button(
@@ -1227,7 +1034,7 @@ else:
             st.sidebar.caption("પેમેન્ટ પછી નીચે Verify બટન દબાવો.")
 
             # ------------------------------------------------
-            # 4. Razorpay Payment Verify
+            # 8. Razorpay Payment Verify
             # ------------------------------------------------
             if st.sidebar.button(
                 "🔄 મેં પેમેન્ટ કરી દીધું (Verify)",
@@ -1254,134 +1061,115 @@ else:
                 except Exception as e:
                     st.sidebar.error(f"❌ વેરિફિકેશન એરર: {e}")
 
+    # --------------------------------------------------------
+    # 9. Free અથવા Paid પછી Download
+    # --------------------------------------------------------
+    is_ready_to_download = (
+        total_price == 0 or st.session_state.payment_done
+    )
 
-            # --------------------------------------------------------
-            # 5. Free અથવા Paid પછી ZIP Download
-            # --------------------------------------------------------
-            is_ready_to_download = (
-                total_price == 0 or st.session_state.payment_done
-            )
+    if is_ready_to_download:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
+        st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
 
-            if is_ready_to_download:
-                st.sidebar.markdown("---")
-                st.sidebar.markdown("## 📥 તમારા ફોટા ડાઉનલોડ કરો")
-                st.sidebar.success("🎉 ફોટો ડાઉનલોડ માટે તૈયાર છે!")
+        # ZIP memoryમાં બનાવો
+        zip_buffer = io.BytesIO()
+        has_files = False
 
-                # ZIP memoryમાં બનાવો
-                zip_buffer = io.BytesIO()
-                has_files = False
+        with zipfile.ZipFile(
+            zip_buffer,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED
+        ) as zip_file:
 
-                with zipfile.ZipFile(
-                    zip_buffer,
-                    mode="w",
-                    compression=zipfile.ZIP_DEFLATED
-                ) as zip_file:
+            for idx, item in enumerate(cart):
+                file_id = item.get("drive_file_id")
+                filename = item.get("filename", f"photo_{idx + 1}.jpg")
+                file_bytes = None
 
-                    for idx, item in enumerate(cart):
-                        file_id = item.get("drive_file_id")
-                        filename = item.get("filename", f"photo_{idx + 1}.jpg")
-                        file_bytes = None
-
-                        # પહેલું: Google Driveથી ફોટો લો
-                        if file_id:
-                            try:
-                                drive_download_url = (
-                                    f"https://drive.google.com/uc?"
-                                    f"export=download&id={file_id}"
-                                )
-
-                                response = requests.get(
-                                    drive_download_url,
-                                    timeout=30
-                                )
-
-                                if response.status_code == 200:
-                                    file_bytes = response.content
-
-                            except Exception as e:
-                                print(f"Google Drive download error: {e}")
-
-                        # બીજું: Local events folderમાં હોય તો લો
-                        if not file_bytes:
-                            local_path = os.path.join(
-                                "events",
-                                event_name,
-                                "images",
-                                filename
-                            )
-
-                            if os.path.exists(local_path):
-                                try:
-                                    with open(local_path, "rb") as photo_file:
-                                        file_bytes = photo_file.read()
-                                except Exception as e:
-                                    print(f"Local photo read error: {e}")
-
-                        # મળેલો photo ZIPમાં ઉમેરો
-                        if file_bytes:
-                            zip_file.writestr(filename, file_bytes)
-                            has_files = True
-
-                zip_buffer.seek(0)
-
-                               # મહત્વપૂર્ણ: data= આપવું જ પડે
-                if has_files:
-                    st.sidebar.download_button(
-                        label=f"📥 બધા {len(cart)} ફોટા Download કરો (ZIP)",
-                        data=zip_buffer.getvalue(),
-                        file_name=f"{event_name}_photos.zip",
-                        mime="application/zip",
-                        width="stretch",
-                    )
-                        # ગ્રાહક Download button દબાવે ત્યારે whatsapp message જશે
-                    admin_phone = st.session_state.get("whatsapp_phone", "9176634111")
-
-                    st.download_button(
-                            label="⬇️ ફોટા Download કરો",
-                            file_name="jay_photo_shodh_photos.zip",
-                            mime="application/zip",
-                            key="customer_download_photos",
-                            on_click=save_whatsapp_notification,
-                            args=(
-                                event_name,
-                                cart,
-                                total_price,
-                                admin_phone,
-                            ),
-                        )
-                    
-
-                    st.sidebar.caption(
-                        f"✅ એક ZIP fileમાં તમારા {len(cart)} પસંદ કરેલા ફોટા download થશે."
-                    )
-
-                else:
-                    st.sidebar.error(
-                        "❌ ZIP માટે ફોટા મળ્યા નથી. "
-                        "Google Drive File ID અથવા local ફોટા folder ચેક કરો."
-                    )
-
-
-
-                # ----------------------------------------------------
-                # 6. દરેક ફોટાની Direct Download Link
-                # ----------------------------------------------------
-                st.sidebar.markdown("---")
-                st.sidebar.markdown("### 📸 એક-એક ફોટો ડાઉનલોડ કરો")
-
-                for idx, item in enumerate(cart):
-                    file_id = item.get("drive_file_id")
-                    filename = item.get("filename", f"photo_{idx + 1}.jpg")
-
-                    if file_id:
-                        direct_link = (
+                # પહેલું: Google Driveથી ફોટો લો
+                if file_id:
+                    try:
+                        drive_download_url = (
                             f"https://drive.google.com/uc?"
                             f"export=download&id={file_id}"
                         )
 
-                        st.sidebar.markdown(
-                            f"📷 [{filename} ડાઉનલોડ કરો]({direct_link})"
+                        response = requests.get(
+                            drive_download_url,
+                            timeout=30
                         )
+
+                        if response.status_code == 200:
+                            file_bytes = response.content
+
+                    except Exception as e:
+                        print(f"Google Drive download error: {e}")
+
+                # બીજું: Local events folderમાં હોય તો લો
+                if not file_bytes:
+                    local_path = os.path.join(
+                        "events",
+                        event_name,
+                        "images",
+                        filename
+                    )
+
+                    if os.path.exists(local_path):
+                        try:
+                            with open(local_path, "rb") as photo_file:
+                                file_bytes = photo_file.read()
+                        except Exception as e:
+                            print(f"Local photo read error: {e}")
+
+                # મળેલો photo ZIPમાં ઉમેરો
+                if file_bytes:
+                    zip_file.writestr(filename, file_bytes)
+                    has_files = True
+
+        zip_buffer.seek(0)
+
+        # ZIP Download button
+        if has_files:
+            st.sidebar.download_button(
+                label=f"📥 બધા {len(cart)} ફોટા Download કરો (ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name=f"{event_name}_photos.zip",
+                mime="application/zip",
+                width="stretch",
+                key="download_all_photos_zip"
+            )
+
+            st.sidebar.caption(
+                f"✅ એક ZIP fileમાં તમારા {len(cart)} પસંદ કરેલા ફોટા download થશે."
+            )
+
+        else:
+            st.sidebar.error(
+                "❌ ZIP માટે ફોટા મળ્યા નથી. "
+                "Google Drive File ID અથવા local ફોટા folder ચેક કરો."
+            )
+
+        # ----------------------------------------------------
+        # 10. દરેક ફોટાની Direct Download Link
+        # ----------------------------------------------------
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 📸 એક-એક ફોટો ડાઉનલોડ કરો")
+
+        for idx, item in enumerate(cart):
+            file_id = item.get("drive_file_id")
+            filename = item.get("filename", f"photo_{idx + 1}.jpg")
+
+            if file_id:
+                direct_link = (
+                    f"https://drive.google.com/uc?"
+                    f"export=download&id={file_id}"
+                )
+
+                st.sidebar.markdown(
+                    f"📷 [{filename} ડાઉનલોડ કરો]({direct_link})"
+                )
 
 
         # ----------------------------------------------------
