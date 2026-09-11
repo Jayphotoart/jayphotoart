@@ -817,6 +817,10 @@ elif option == "🔍 ફોટો શોધો" or option == "🔍 ફોટો 
     if event_name:
         if f"auth_{event_name}" not in st.session_state:
             st.session_state[f"auth_{event_name}"] = False
+
+        # Payment success પછી authentication bypass કરો
+        if st.session_state.get("payment_done"):
+            st.session_state[f"auth_{event_name}"] = True
         
         # ગ્રાહક માટે ઇવેન્ટ પાસવર્ડ
         if not st.session_state[f"auth_{event_name}"]:
