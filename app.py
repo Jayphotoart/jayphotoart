@@ -712,23 +712,7 @@ if option == "🔒 એડમિન લૉગિન":
             st.rerun()
         else:
             st.error("❌ ખોટો એડમિન પાસવર્ડ!")
-#==============================================================
-#    GOOGLE SHEET TEST
-#=============================================================
-if st.session_state.get("admin_logged_in"):
-    if st.button("🧪 Google Sheet ટેસ્ટ કરો"):
-        success = save_order_to_sheet(
-            order_id="TEST_123",
-            event_name="Test Event",
-            photo_ids=["photo1.jpg", "photo2.jpg"],
-            amount=100,
-            status="pending",
-            payment_link_id="link_test"
-        )
-        if success:
-            st.success("✅ Google Sheet માં સેવ થયો! Sheet ખોલીને ચેક કરો.")
-        else:
-            st.error("❌ Sheet માં સેવ ના થયો. Refresh token / Sheet ID ચેક કરો.")
+
 # ============================================================
 # PAGE 1: MANAGE EVENTS (માત્ર એડમિન માટે)
 # ============================================================
@@ -1584,6 +1568,23 @@ if total_price > 0 and not st.session_state.payment_done:
             st.session_state.payment_url = None
             st.session_state.telegram_sent = False
             st.rerun()
+#==============================================================
+#    GOOGLE SHEET TEST
+#=============================================================
+if st.session_state.get("admin_logged_in"):
+    if st.button("🧪 Google Sheet ટેસ્ટ કરો"):
+        success = save_order_to_sheet(
+            order_id="TEST_123",
+            event_name="Test Event",
+            photo_ids=["photo1.jpg", "photo2.jpg"],
+            amount=100,
+            status="pending",
+            payment_link_id="link_test"
+        )
+        if success:
+            st.success("✅ Google Sheet માં સેવ થયો! Sheet ખોલીને ચેક કરો.")
+        else:
+            st.error("❌ Sheet માં સેવ ના થયો. Refresh token / Sheet ID ચેક કરો.")
 # ============================================================
 # SIDEBAR - WhatsApp Settings
 # ============================================================
