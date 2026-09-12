@@ -1,3 +1,7 @@
+# Token generator (temporary)
+token_gen/
+get-pip.py
+
 # Python Virtual Environment
 .venv/
 venv/
@@ -30,6 +34,7 @@ photos/
 faces/
 Saved Pictures/
 images_old_backup/
+temp_crops/
 
 # Face Embeddings / FAISS Data
 *.faiss
@@ -55,6 +60,7 @@ fresh_similarity_summary.json
 .env
 .env.*
 .streamlit/secrets.toml
+client_secret.json
 
 # Google OAuth / Credentials
 credentials.json
