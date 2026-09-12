@@ -419,9 +419,8 @@ def save_order_to_sheet(order_id, event_name, photo_ids, amount,
         ).execute()
         return True
     except Exception as e:
-        print(f"save_order_to_sheet error: {e}")
+        st.error(f"❌ Sheet Error: {e}")   # ✅ નવું — screen પર દેખાશે
         return False
-
 
 def get_order_from_sheet(order_id):
     """order_id થી order શોધે."""
@@ -449,7 +448,7 @@ def get_order_from_sheet(order_id):
                 }
         return None
     except Exception as e:
-        print(f"get_order_from_sheet error: {e}")
+        st.error(f"❌ Service Error: {e}")
         return None
 
 
