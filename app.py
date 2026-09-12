@@ -122,6 +122,8 @@ page_from_url = query_params.get("page", "")
 order_id_from_url = query_params.get("order_id", "")
 payment_status_from_url = query_params.get("status", "")
 
+PHOTO_PRICE = 10
+
 # ============================================================
 # SESSION STATE INIT
 # ============================================================
@@ -145,43 +147,11 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 # ============================================================
-# 🎯 ORDER RESTORE FROM URL (payment પછી સૌથી પહેલાં!)
-# ============================================================
-if order_id_from_url and not st.session_state.get("payment_done"):
-    order = get_order(order_id_from_url)
-    if order:
-        # Cart restore કરો
-        st.session_state.cart = order["photo_ids"]
-        st.session_state.saved_cart = order["photo_ids"]
-        st.session_state.saved_event = order["event_name"]
-        st.session_state.saved_total = order["amount"]
-        st.session_state.order_id = order_id_from_url
-        st.session_state.payment_link_id = order["payment_link_id"]
-
-        # Auto verify Razorpay
-        try:
-            link = razorpay_client.payment_link.fetch(order["payment_link_id"])
-            if link.get("status") == "paid":
-                update_order_status(order_id_from_url, "paid")
-                st.session_state.payment_done = True
-                st.session_state.payment_verified = True
-                st.success("✅ પેમેન્ટ સફળ! તમારા ફોટા નીચે તૈયાર છે.")
-                st.balloons()
-        except Exception as e:
-            st.warning(f"Payment verify fail: {e}")
-
-# Razorpay callback URL params (alternative flow)
-if "payment_id" in query_params and payment_status_from_url == "captured":
-    st.session_state.payment_done = True
-    st.session_state.payment_id = query_params.get("payment_id")
-    st.session_state.payment_verified = True
-
-# ============================================================
 # CONSTANTS
 # ============================================================
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 ROOT_FOLDER_ID = "1B-qd1ZtJkQfxIUzpUCxdvaVIMAkVQtqH"
-PHOTO_PRICE = 10
+
 #=============================================================
 # Make Preview For Customer
 #=============================================================
@@ -318,7 +288,7 @@ def get_drive_service():
             client_id=st.secrets["oauth"]["client_id"],
             client_secret=st.secrets["oauth"]["client_secret"],
             token_uri="https://oauth2.googleapis.com/token",
-            scopes=["https://www.googleapis.com/auth/drive.file"]
+            scopes=["https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/spreadsheets"]
         )
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -392,6 +362,123 @@ def save_event_data_to_drive(event_name, data, folder_id):
             os.remove(temp_path)
         return True
     except Exception:
+        return False
+# ============================================================
+# 📊 GOOGLE SHEETS — Orders Storage
+# ============================================================
+SHEET_ID = st.secrets["sheet_id"]
+SHEET_NAME = "Sheet1"   # Google Sheet માં tab નામ (default "Sheet1")
+
+@st.cache_resource
+def get_sheets_service():
+    """Google Sheets service બનાવે (cached)."""
+    try:
+        creds = Credentials(
+            token=None,
+            refresh_token=st.secrets["oauth"]["refresh_token"],
+            client_id=st.secrets["oauth"]["client_id"],
+            client_secret=st.secrets["oauth"]["client_secret"],
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=[
+                "https://www.googleapis.com/auth/drive.file",
+                "https://www.googleapis.com/auth/spreadsheets"
+            ]
+        )
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        return build('sheets', 'v4', credentials=creds)
+    except Exception as e:
+        print(f"Sheets service error: {e}")
+        return None
+
+
+def save_order_to_sheet(order_id, event_name, photo_ids, amount,
+                        status, payment_link_id):
+    """નવો order Google Sheet માં ઉમેરે."""
+    try:
+        service = get_sheets_service()
+        if service is None:
+            return False
+
+        values = [[
+            order_id,
+            str(event_name),
+            json.dumps(photo_ids, ensure_ascii=False),
+            float(amount),
+            status,
+            payment_link_id,
+            datetime.now().isoformat()
+        ]]
+
+        service.spreadsheets().values().append(
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!A:G",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": values}
+        ).execute()
+        return True
+    except Exception as e:
+        print(f"save_order_to_sheet error: {e}")
+        return False
+
+
+def get_order_from_sheet(order_id):
+    """order_id થી order શોધે."""
+    try:
+        service = get_sheets_service()
+        if service is None:
+            return None
+
+        result = service.spreadsheets().values().get(
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!A:G"
+        ).execute()
+
+        rows = result.get("values", [])
+        for row in rows[1:]:   # header skip
+            if len(row) >= 7 and row[0] == order_id:
+                return {
+                    "order_id": row[0],
+                    "event_name": row[1],
+                    "photo_ids": json.loads(row[2]) if row[2] else [],
+                    "amount": float(row[3]) if row[3] else 0,
+                    "status": row[4],
+                    "payment_link_id": row[5],
+                    "created_at": row[6]
+                }
+        return None
+    except Exception as e:
+        print(f"get_order_from_sheet error: {e}")
+        return None
+
+
+def update_order_status_in_sheet(order_id, new_status):
+    """order_id ની row શોધીને status update કરે."""
+    try:
+        service = get_sheets_service()
+        if service is None:
+            return False
+
+        result = service.spreadsheets().values().get(
+            spreadsheetId=SHEET_ID,
+            range=f"{SHEET_NAME}!A:G"
+        ).execute()
+        rows = result.get("values", [])
+
+        for i, row in enumerate(rows):
+            if len(row) >= 1 and row[0] == order_id:
+                cell = f"{SHEET_NAME}!E{i + 1}"
+                service.spreadsheets().values().update(
+                    spreadsheetId=SHEET_ID,
+                    range=cell,
+                    valueInputOption="RAW",
+                    body={"values": [[new_status]]}
+                ).execute()
+                return True
+        return False
+    except Exception as e:
+        print(f"update_order_status_in_sheet error: {e}")
         return False
 
 # ============================================================
@@ -495,6 +582,57 @@ def parse_embedding(embedding_data):
     if isinstance(embedding_data, np.ndarray):
         return embedding_data
     return None
+# ============================================================
+# 🎯 ORDER RESTORE FROM URL (payment પછી)
+# ============================================================
+if order_id_from_url and not st.session_state.get("payment_done"):
+    order = get_order_from_sheet(order_id_from_url)
+    if order:
+        # Cart restore કરો (dicts તરીકે)
+        restored_cart = []
+        event_data = load_event_data_local(order["event_name"])
+        faces = event_data.get("faces", [])
+
+        for photo_id in order["photo_ids"]:
+            # drive_file_id શોધો
+            drive_file_id = None
+            for face in faces:
+                if face.get("filename") == photo_id:
+                    drive_file_id = face.get("drive_file_id")
+                    break
+
+            restored_cart.append({
+                "person": "MyPhoto",
+                "filename": photo_id,
+                "price": PHOTO_PRICE,
+                "img_path": None,
+                "drive_file_id": drive_file_id
+            })
+
+        st.session_state.cart = restored_cart
+        st.session_state.saved_cart = restored_cart
+        st.session_state.saved_event = order["event_name"]
+        st.session_state.saved_total = order["amount"]
+        st.session_state.order_id = order_id_from_url
+        st.session_state.payment_link_id = order["payment_link_id"]
+
+        # Auto verify Razorpay
+        try:
+            link = razorpay_client.payment_link.fetch(order["payment_link_id"])
+            if link.get("status") == "paid":
+                update_order_status_in_sheet(order_id_from_url, "paid")
+                st.session_state.payment_done = True
+                st.session_state.payment_verified = True
+                st.success("✅ પેમેન્ટ સફળ! તમારા ફોટા નીચે તૈયાર છે.")
+                st.balloons()
+        except Exception as e:
+            st.warning(f"Payment verify fail: {e}")
+
+# Razorpay callback URL params (alternative flow)
+if "payment_id" in query_params and payment_status_from_url == "captured":
+    st.session_state.payment_done = True
+    st.session_state.payment_id = query_params.get("payment_id")
+    st.session_state.payment_verified = True
 
 # ============================================================
 # 6️⃣ INSIGHTFACE MODEL
@@ -574,7 +712,23 @@ if option == "🔒 એડમિન લૉગિન":
             st.rerun()
         else:
             st.error("❌ ખોટો એડમિન પાસવર્ડ!")
-
+#==============================================================
+#    GOOGLE SHEET TEST
+#=============================================================
+if st.session_state.get("admin_logged_in"):
+    if st.button("🧪 Google Sheet ટેસ્ટ કરો"):
+        success = save_order_to_sheet(
+            order_id="TEST_123",
+            event_name="Test Event",
+            photo_ids=["photo1.jpg", "photo2.jpg"],
+            amount=100,
+            status="pending",
+            payment_link_id="link_test"
+        )
+        if success:
+            st.success("✅ Google Sheet માં સેવ થયો! Sheet ખોલીને ચેક કરો.")
+        else:
+            st.error("❌ Sheet માં સેવ ના થયો. Refresh token / Sheet ID ચેક કરો.")
 # ============================================================
 # PAGE 1: MANAGE EVENTS (માત્ર એડમિન માટે)
 # ============================================================
@@ -859,6 +1013,7 @@ elif option == "📱 QR કોડ બનાવો":
     query_params = st.query_params
     event_name_from_url = query_params.get("event", "")
     page_from_url = query_params.get("page", "")
+    order_id_from_url = query_params.get("order_id", "")
 
     # Payment success પછી
     if "payment_id" in query_params and "status" in query_params:
@@ -1184,8 +1339,8 @@ if total_price > 0 and not st.session_state.payment_done:
 
                 res = razorpay_client.payment_link.create(link_data)
 
-                # ✅ 5. ડેટાબેઝમાં order સેવ કરો
-                save_order(
+                # ✅ 5. Google Sheet માં order સેવ કરો
+                save_success = save_order_to_sheet(
                     order_id=order_id,
                     event_name=str(event_name),
                     photo_ids=photo_ids_list,
@@ -1193,6 +1348,9 @@ if total_price > 0 and not st.session_state.payment_done:
                     status="pending",
                     payment_link_id=res["id"]
                 )
+
+                if not save_success:
+                    st.sidebar.error("⚠️ Order save ના થયો, પણ પેમેન્ટ ચાલુ રાખો")
 
                 # ✅ 6. Session state
                 st.session_state.order_id = order_id
@@ -1223,8 +1381,8 @@ if total_price > 0 and not st.session_state.payment_done:
                 )
                 if status_res.get("status") == "paid":
                     # DB માં status paid કરો
-                    if st.session_state.order_id:
-                        update_order_status(st.session_state.order_id, "paid")
+                    if st.session_state.get("order_id"):
+                        update_order_status_in_sheet(st.session_state.order_id, "paid")
 
                     st.session_state.payment_done = True
                     st.session_state.payment_verified = True
